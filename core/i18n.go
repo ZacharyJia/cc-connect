@@ -238,8 +238,8 @@ var messages = map[MsgKey]map[Language]string{
 		LangChinese: "🔇 安静模式已开启 — 将不再推送思考和工具调用进度消息。",
 	},
 	MsgQuietOff: {
-		LangEnglish: "🔔 Quiet mode OFF — thinking and tool progress messages will be shown.",
-		LangChinese: "🔔 安静模式已关闭 — 将恢复推送思考和工具调用进度消息。",
+		LangEnglish: "🔔 Quiet mode OFF — switched back to concise progress mode.",
+		LangChinese: "🔔 安静模式已关闭 — 已切回简洁总结进度模式。",
 	},
 	MsgModeChanged: {
 		LangEnglish: "🔄 Permission mode switched to **%s**. New sessions will use this mode.",
@@ -299,6 +299,7 @@ var messages = map[MsgKey]map[Language]string{
 			"/provider [list|add|remove|switch]\n  Manage API providers\n\n" +
 			"/allow <tool>\n  Pre-allow a tool (next session)\n\n" +
 			"/mode [name]\n  View/switch permission mode\n\n" +
+			"/output [concise|verbose|quiet]\n  View/switch output verbosity\n\n" +
 			"/lang [en|zh|auto]\n  View/switch language\n\n" +
 			"/quiet\n  Toggle thinking/tool progress\n\n" +
 			"/stop\n  Stop current execution\n\n" +
@@ -315,6 +316,7 @@ var messages = map[MsgKey]map[Language]string{
 			"/provider [list|add|remove|switch]\n  管理 API Provider\n\n" +
 			"/allow <工具名>\n  预授权工具（下次会话生效）\n\n" +
 			"/mode [名称]\n  查看/切换权限模式\n\n" +
+			"/output [concise|verbose|quiet]\n  查看/切换输出模式\n\n" +
 			"/lang [en|zh|auto]\n  查看/切换语言\n\n" +
 			"/quiet\n  开关思考和工具进度消息\n\n" +
 			"/stop\n  停止当前执行\n\n" +

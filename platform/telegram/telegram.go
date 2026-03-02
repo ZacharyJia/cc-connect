@@ -230,6 +230,7 @@ func (p *Platform) registerCommands() {
 		{Command: "provider", Description: "Manage providers"},
 		{Command: "allow", Description: "Pre-allow a tool"},
 		{Command: "mode", Description: "View or switch mode"},
+		{Command: "output", Description: "View or switch output mode"},
 		{Command: "lang", Description: "View or switch language"},
 		{Command: "quiet", Description: "Toggle progress messages"},
 		{Command: "stop", Description: "Stop current execution"},
@@ -247,6 +248,7 @@ func (p *Platform) registerCommands() {
 		{Command: "provider", Description: "管理提供商"},
 		{Command: "allow", Description: "预授权工具"},
 		{Command: "mode", Description: "查看或切换模式"},
+		{Command: "output", Description: "查看或切换输出模式"},
 		{Command: "lang", Description: "查看或切换语言"},
 		{Command: "quiet", Description: "开关进度消息"},
 		{Command: "stop", Description: "停止当前执行"},
@@ -341,6 +343,60 @@ func (p *Platform) ReplyWithButtons(ctx context.Context, rctx any, content strin
 		if err != nil {
 			return fmt.Errorf("telegram: send with buttons: %w", err)
 		}
+	}
+	return nil
+}
+
+// StartDraft sends an initial progress message and returns a reply context
+// that can be used by UpdateMessage for in-place updates.
+func (p *Platform) StartDraft(ctx context.Context, rctx any, content string) (any, error) {
+	rc, ok := rctx.(replyContext)
+	if !ok {
+		return nil, fmt.Errorf("telegram: invalid reply context type %T", rctx)
+	}
+
+	msg := tgbotapi.NewMessage(rc.chatID, content)
+	msg.ParseMode = tgbotapi.ModeMarkdown
+	msg.ReplyToMessageID = rc.messageID
+
+	sent, err := p.bot.Send(msg)
+	if err != nil {
+		if strings.Contains(err.Error(), "can't parse") {
+			msg.ParseMode = ""
+			sent, err = p.bot.Send(msg)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("telegram: start draft: %w", err)
+		}
+	}
+	return replyContext{chatID: rc.chatID, messageID: sent.MessageID}, nil
+}
+
+// UpdateMessage edits an existing bot message in place.
+func (p *Platform) UpdateMessage(ctx context.Context, rctx any, content string) error {
+	rc, ok := rctx.(replyContext)
+	if !ok {
+		return fmt.Errorf("telegram: invalid update context type %T", rctx)
+	}
+	if rc.messageID == 0 {
+		return fmt.Errorf("telegram: update requires message_id")
+	}
+
+	edit := tgbotapi.NewEditMessageText(rc.chatID, rc.messageID, content)
+	edit.ParseMode = tgbotapi.ModeMarkdown
+	if _, err := p.bot.Send(edit); err != nil {
+		if strings.Contains(err.Error(), "message is not modified") {
+			return nil
+		}
+		if strings.Contains(err.Error(), "can't parse") {
+			edit.ParseMode = ""
+			if _, err2 := p.bot.Send(edit); err2 == nil {
+				return nil
+			} else {
+				return fmt.Errorf("telegram: update message: %w", err2)
+			}
+		}
+		return fmt.Errorf("telegram: update message: %w", err)
 	}
 	return nil
 }

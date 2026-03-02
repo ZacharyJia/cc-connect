@@ -42,6 +42,12 @@ type MessageUpdater interface {
 	UpdateMessage(ctx context.Context, replyCtx any, content string) error
 }
 
+// DraftStarter is an optional interface for platforms that can create
+// a draft/progress message and return a context for later updates.
+type DraftStarter interface {
+	StartDraft(ctx context.Context, replyCtx any, content string) (any, error)
+}
+
 // MessageHandler is called by platforms when a new message arrives.
 type MessageHandler func(p Platform, msg *Message)
 

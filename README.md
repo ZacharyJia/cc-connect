@@ -259,6 +259,9 @@ Switch mode at runtime from the chat:
 /mode          # show current mode and all available modes
 /mode yolo     # switch to YOLO mode
 /mode default  # switch back to default
+/output        # show output mode (concise/verbose/quiet)
+/output verbose
+/output concise
 ```
 
 ## API Provider Management `Beta`
@@ -396,6 +399,7 @@ Each user gets an independent session with full conversation context. Manage ses
 /provider [...]   Manage API providers (list/add/remove/switch)
 /allow <tool>     Pre-allow a tool (takes effect on next session)
 /mode [name]      View or switch permission mode
+/output [mode]    View or switch output mode (concise/verbose/quiet)
 /quiet            Toggle thinking/tool progress messages
 /stop             Stop current execution
 /help             Show available commands

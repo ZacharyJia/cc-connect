@@ -387,6 +387,7 @@ Once running, send messages to your bot on the configured platform. Available sl
 /current         — Show current active session
 /history [n]     — Show last n messages (default 10)
 /mode [name]     — View/switch permission mode (default/edit/plan/yolo)
+/output [mode]   — View/switch output mode (concise/verbose/quiet)
 /quiet           — Toggle thinking/tool progress messages
 /allow <tool>    — Pre-allow a tool (next session)
 /provider [...]  — Manage API providers (list/add/remove/switch) [Beta]

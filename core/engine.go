@@ -21,6 +21,17 @@ import (
 const (
 	maxPlatformMessageLen       = 4000
 	newSessionDefaultButtonData = "cc:new:default"
+	outputConciseButtonData     = "/output concise"
+	outputVerboseButtonData     = "/output verbose"
+	outputQuietButtonData       = "/output quiet"
+)
+
+type progressOutputMode string
+
+const (
+	progressOutputConcise progressOutputMode = "concise"
+	progressOutputVerbose progressOutputMode = "verbose"
+	progressOutputQuiet   progressOutputMode = "quiet"
 )
 
 // VersionInfo is set by main at startup so that /version works.
@@ -58,7 +69,7 @@ type interactiveState struct {
 	mu           sync.Mutex
 	pending      *pendingPermission
 	approveAll   bool // when true, auto-approve all permission requests for this session
-	quiet        bool // when true, suppress thinking and tool progress messages
+	progressMode progressOutputMode
 }
 
 // pendingPermission represents a permission request waiting for user response.
@@ -457,7 +468,7 @@ func isKnownSlashCommand(content string) bool {
 	cmd := strings.ToLower(parts[0])
 	switch cmd {
 	case "/new", "/list", "/sessions", "/switch", "/current", "/history",
-		"/allow", "/mode", "/lang", "/quiet", "/provider", "/cron", "/stop",
+		"/allow", "/mode", "/lang", "/output", "/quiet", "/provider", "/cron", "/stop",
 		"/help", "/version":
 		return true
 	default:
@@ -521,6 +532,12 @@ func (e *Engine) getOrCreateInteractiveState(sessionKey string, p Platform, repl
 	if ok && state.agentSession != nil && state.agentSession.Alive() {
 		return state
 	}
+	progressMode := progressOutputConcise
+	if ok && state != nil {
+		state.mu.Lock()
+		progressMode = normalizeProgressOutputMode(state.progressMode)
+		state.mu.Unlock()
+	}
 
 	// Inject per-session env vars so the agent subprocess can call `cc-connect cron add` etc.
 	if inj, ok := e.agent.(SessionEnvInjector); ok {
@@ -538,7 +555,7 @@ func (e *Engine) getOrCreateInteractiveState(sessionKey string, p Platform, repl
 	agentSession, err := e.agent.StartSession(e.ctx, session.AgentSessionID)
 	if err != nil {
 		slog.Error("failed to start interactive session", "error", err)
-		state = &interactiveState{platform: p, replyCtx: replyCtx}
+		state = &interactiveState{platform: p, replyCtx: replyCtx, progressMode: progressMode}
 		e.interactiveStates[sessionKey] = state
 		return state
 	}
@@ -547,6 +564,7 @@ func (e *Engine) getOrCreateInteractiveState(sessionKey string, p Platform, repl
 		agentSession: agentSession,
 		platform:     p,
 		replyCtx:     replyCtx,
+		progressMode: progressMode,
 	}
 	e.interactiveStates[sessionKey] = state
 
@@ -568,6 +586,9 @@ func (e *Engine) cleanupInteractiveState(sessionKey string) {
 func (e *Engine) processInteractiveEvents(state *interactiveState, session *Session, sessionKey string) {
 	var textParts []string
 	toolCount := 0
+	progress := conciseProgressState{}
+	var draftCtx any
+	lastDraftAt := time.Time{}
 
 	for event := range state.agentSession.Events() {
 		if e.ctx.Err() != nil {
@@ -577,20 +598,38 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		state.mu.Lock()
 		p := state.platform
 		replyCtx := state.replyCtx
+		mode := normalizeProgressOutputMode(state.progressMode)
 		state.mu.Unlock()
 
 		switch event.Type {
 		case EventThinking:
-			if !state.quiet && event.Content != "" {
+			if event.Content != "" {
 				preview := truncate(event.Content, 300)
-				e.send(p, replyCtx, fmt.Sprintf(e.i18n.T(MsgThinking), preview))
+				switch mode {
+				case progressOutputVerbose:
+					e.send(p, replyCtx, fmt.Sprintf(e.i18n.T(MsgThinking), preview))
+				case progressOutputConcise:
+					progress.observeThinking(preview)
+					// Throttle frequent thought updates to avoid flood while keeping one draft fresh.
+					if time.Since(lastDraftAt) >= 1200*time.Millisecond {
+						if updated := e.upsertDraft(p, replyCtx, &draftCtx, progress.render(e.i18n.CurrentLang(), false)); updated {
+							lastDraftAt = time.Now()
+						}
+					}
+				}
 			}
 
 		case EventToolUse:
 			toolCount++
-			if !state.quiet {
+			switch mode {
+			case progressOutputVerbose:
 				inputPreview := truncate(event.ToolInput, 500)
 				e.send(p, replyCtx, fmt.Sprintf(e.i18n.T(MsgTool), toolCount, event.ToolName, inputPreview))
+			case progressOutputConcise:
+				progress.observeTool(toolCount, event.ToolName)
+				if updated := e.upsertDraft(p, replyCtx, &draftCtx, progress.render(e.i18n.CurrentLang(), false)); updated {
+					lastDraftAt = time.Now()
+				}
 			}
 
 		case EventText:
@@ -660,6 +699,9 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				"tools", toolCount,
 				"response_len", len(fullResponse),
 			)
+			if mode == progressOutputConcise && draftCtx != nil {
+				e.updateDraft(p, draftCtx, progress.render(e.i18n.CurrentLang(), true))
+			}
 
 			for _, chunk := range splitMessage(fullResponse, maxPlatformMessageLen) {
 				if err := p.Send(e.ctx, replyCtx, chunk); err != nil {
@@ -672,6 +714,9 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		case EventError:
 			if event.Error != nil {
 				slog.Error("agent error", "error", event.Error)
+				if mode == progressOutputConcise && draftCtx != nil {
+					e.updateDraft(p, draftCtx, progress.render(e.i18n.CurrentLang(), true))
+				}
 				e.send(p, replyCtx, fmt.Sprintf(e.i18n.T(MsgError), event.Error))
 			}
 			return
@@ -693,6 +738,79 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		for _, chunk := range splitMessage(fullResponse, maxPlatformMessageLen) {
 			e.send(p, replyCtx, chunk)
 		}
+	}
+}
+
+type conciseProgressState struct {
+	thinkingCount int
+	toolCount     int
+	lastThinking  string
+	lastToolLabel string
+}
+
+func (ps *conciseProgressState) observeThinking(preview string) {
+	ps.thinkingCount++
+	ps.lastThinking = preview
+}
+
+func (ps *conciseProgressState) observeTool(n int, toolName string) {
+	ps.toolCount = n
+	if toolName == "" {
+		toolName = "Tool"
+	}
+	ps.lastToolLabel = fmt.Sprintf("#%d %s", n, toolName)
+}
+
+func (ps *conciseProgressState) render(lang Language, done bool) string {
+	lastThinking := ps.lastThinking
+	if lastThinking == "" {
+		lastThinking = "-"
+	}
+	lastTool := ps.lastToolLabel
+	if lastTool == "" {
+		lastTool = "-"
+	}
+
+	if lang == LangChinese {
+		status := "运行中"
+		if done {
+			status = "已完成"
+		}
+		return fmt.Sprintf(
+			"📝 进度摘要（简洁模式）\n状态: %s\n思考事件: %d\n工具调用: %d\n最近工具: %s\n最近思考: %s",
+			status, ps.thinkingCount, ps.toolCount, lastTool, truncate(lastThinking, 140),
+		)
+	}
+
+	status := "Running"
+	if done {
+		status = "Completed"
+	}
+	return fmt.Sprintf(
+		"📝 Progress Summary (concise)\nStatus: %s\nThinking events: %d\nTool calls: %d\nLatest tool: %s\nLatest thought: %s",
+		status, ps.thinkingCount, ps.toolCount, lastTool, truncate(lastThinking, 140),
+	)
+}
+
+func normalizeProgressOutputMode(mode progressOutputMode) progressOutputMode {
+	switch mode {
+	case progressOutputVerbose, progressOutputQuiet, progressOutputConcise:
+		return mode
+	default:
+		return progressOutputConcise
+	}
+}
+
+func parseProgressOutputMode(raw string) (progressOutputMode, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "concise", "summary", "simple", "default", "简洁", "简洁模式":
+		return progressOutputConcise, true
+	case "verbose", "detail", "detailed", "啰嗦", "详细", "详细模式":
+		return progressOutputVerbose, true
+	case "quiet", "silent", "安静", "静默", "安静模式":
+		return progressOutputQuiet, true
+	default:
+		return progressOutputConcise, false
 	}
 }
 
@@ -722,6 +840,8 @@ func (e *Engine) handleCommand(p Platform, msg *Message, raw string) {
 		e.cmdMode(p, msg, args)
 	case "/lang":
 		e.cmdLang(p, msg, args)
+	case "/output":
+		e.cmdOutput(p, msg, args)
 	case "/quiet":
 		e.cmdQuiet(p, msg)
 	case "/provider":
@@ -956,6 +1076,102 @@ func langDisplayName(lang Language) string {
 	}
 }
 
+func (e *Engine) cmdOutput(p Platform, msg *Message, args []string) {
+	e.interactiveMu.Lock()
+	state, ok := e.interactiveStates[msg.SessionKey]
+	e.interactiveMu.Unlock()
+
+	if !ok || state == nil {
+		state = &interactiveState{
+			platform:     p,
+			replyCtx:     msg.ReplyCtx,
+			progressMode: progressOutputConcise,
+		}
+		e.interactiveMu.Lock()
+		e.interactiveStates[msg.SessionKey] = state
+		e.interactiveMu.Unlock()
+	}
+
+	if len(args) == 0 {
+		state.mu.Lock()
+		current := normalizeProgressOutputMode(state.progressMode)
+		state.mu.Unlock()
+
+		isZh := e.i18n.CurrentLang() == LangChinese
+		var sb strings.Builder
+		if isZh {
+			sb.WriteString("📣 当前输出模式\n\n")
+			sb.WriteString(e.renderOutputModeLine(progressOutputConcise, current, "简洁总结", "将思考/工具进度聚合到一条消息中持续更新"))
+			sb.WriteString(e.renderOutputModeLine(progressOutputVerbose, current, "啰嗦", "每条思考/工具调用都单独推送"))
+			sb.WriteString(e.renderOutputModeLine(progressOutputQuiet, current, "quiet", "不推送进度消息，仅发送最终回复"))
+			sb.WriteString("\n使用 `/output <concise|verbose|quiet>` 切换。")
+		} else {
+			sb.WriteString("📣 Current output mode\n\n")
+			sb.WriteString(e.renderOutputModeLine(progressOutputConcise, current, "Concise", "Update one draft message with thinking/tool summary"))
+			sb.WriteString(e.renderOutputModeLine(progressOutputVerbose, current, "Verbose", "Send each thinking/tool event as a new message"))
+			sb.WriteString(e.renderOutputModeLine(progressOutputQuiet, current, "Quiet", "Hide progress messages and only send final reply"))
+			sb.WriteString("\nUse `/output <concise|verbose|quiet>` to switch.")
+		}
+
+		e.replyWithButtons(p, msg.ReplyCtx, sb.String(), []Button{
+			{Text: "Concise", Data: outputConciseButtonData},
+			{Text: "Verbose", Data: outputVerboseButtonData},
+			{Text: "Quiet", Data: outputQuietButtonData},
+		})
+		return
+	}
+
+	target, ok := parseProgressOutputMode(args[0])
+	if !ok {
+		if e.i18n.CurrentLang() == LangChinese {
+			e.reply(p, msg.ReplyCtx, "未知输出模式。可用值: `concise` / `verbose` / `quiet`")
+		} else {
+			e.reply(p, msg.ReplyCtx, "Unknown output mode. Available: `concise` / `verbose` / `quiet`")
+		}
+		return
+	}
+
+	state.mu.Lock()
+	state.progressMode = target
+	state.platform = p
+	state.replyCtx = msg.ReplyCtx
+	state.mu.Unlock()
+
+	if e.i18n.CurrentLang() == LangChinese {
+		e.reply(p, msg.ReplyCtx, fmt.Sprintf("✅ 输出模式已切换为 **%s**。", e.outputModeDisplayName(target, true)))
+		return
+	}
+	e.reply(p, msg.ReplyCtx, fmt.Sprintf("✅ Output mode switched to **%s**.", e.outputModeDisplayName(target, false)))
+}
+
+func (e *Engine) renderOutputModeLine(mode, current progressOutputMode, name, desc string) string {
+	marker := "  "
+	if mode == current {
+		marker = "▶ "
+	}
+	return fmt.Sprintf("%s**%s** — %s\n", marker, name, desc)
+}
+
+func (e *Engine) outputModeDisplayName(mode progressOutputMode, zh bool) string {
+	switch mode {
+	case progressOutputVerbose:
+		if zh {
+			return "啰嗦"
+		}
+		return "Verbose"
+	case progressOutputQuiet:
+		if zh {
+			return "quiet"
+		}
+		return "Quiet"
+	default:
+		if zh {
+			return "简洁总结"
+		}
+		return "Concise"
+	}
+}
+
 func (e *Engine) cmdHelp(p Platform, msg *Message) {
 	e.reply(p, msg.ReplyCtx, e.i18n.T(MsgHelp))
 }
@@ -1021,7 +1237,7 @@ func (e *Engine) cmdQuiet(p Platform, msg *Message) {
 
 	if !ok || state == nil {
 		// No state yet, create one so the flag persists
-		state = &interactiveState{platform: p, replyCtx: msg.ReplyCtx, quiet: true}
+		state = &interactiveState{platform: p, replyCtx: msg.ReplyCtx, progressMode: progressOutputQuiet}
 		e.interactiveMu.Lock()
 		e.interactiveStates[msg.SessionKey] = state
 		e.interactiveMu.Unlock()
@@ -1030,8 +1246,13 @@ func (e *Engine) cmdQuiet(p Platform, msg *Message) {
 	}
 
 	state.mu.Lock()
-	state.quiet = !state.quiet
-	quiet := state.quiet
+	cur := normalizeProgressOutputMode(state.progressMode)
+	if cur == progressOutputQuiet {
+		state.progressMode = progressOutputConcise
+	} else {
+		state.progressMode = progressOutputQuiet
+	}
+	quiet := state.progressMode == progressOutputQuiet
 	state.mu.Unlock()
 
 	if quiet {
@@ -1353,6 +1574,41 @@ func (e *Engine) replyWithButtons(p Platform, replyCtx any, content string, butt
 			e.reply(p, replyCtx, content)
 		}
 	}
+}
+
+func (e *Engine) upsertDraft(p Platform, baseReplyCtx any, draftCtx *any, content string) bool {
+	if draftCtx == nil {
+		return false
+	}
+	if *draftCtx == nil {
+		starter, okStarter := p.(DraftStarter)
+		updater, okUpdater := p.(MessageUpdater)
+		if !okStarter || !okUpdater {
+			return false
+		}
+		ctx, err := starter.StartDraft(e.ctx, baseReplyCtx, content)
+		if err != nil {
+			slog.Warn("failed to start draft", "platform", p.Name(), "error", err)
+			return false
+		}
+		*draftCtx = ctx
+		// Ensure updater is referenced so both interfaces are required.
+		_ = updater
+		return true
+	}
+	return e.updateDraft(p, *draftCtx, content)
+}
+
+func (e *Engine) updateDraft(p Platform, draftCtx any, content string) bool {
+	updater, ok := p.(MessageUpdater)
+	if !ok {
+		return false
+	}
+	if err := updater.UpdateMessage(e.ctx, draftCtx, content); err != nil {
+		slog.Warn("failed to update draft", "platform", p.Name(), "error", err)
+		return false
+	}
+	return true
 }
 
 func (e *Engine) setPendingNewSession(sessionKey, name string) {

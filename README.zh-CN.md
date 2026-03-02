@@ -262,6 +262,9 @@ mode = "full-auto"
 /mode          # 查看当前模式和所有可用模式
 /mode yolo     # 切换到 YOLO 模式
 /mode default  # 切换回默认模式
+/output        # 查看输出模式（concise/verbose/quiet）
+/output verbose
+/output concise
 ```
 
 ## API Provider 管理 `Beta`
@@ -399,6 +402,7 @@ apk add ffmpeg
 /provider [list|add|remove|switch] 管理 API Provider
 /allow <工具名>         预授权工具（下次会话生效）
 /mode [名称]           查看或切换权限模式
+/output [模式]         查看或切换输出模式（concise/verbose/quiet）
 /quiet                 开关思考和工具进度消息推送
 /stop                  停止当前执行
 /help                  显示可用命令

@@ -589,6 +589,10 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 	progress := conciseProgressState{}
 	var draftCtx any
 	lastDraftAt := time.Time{}
+	isCodex := strings.EqualFold(e.agent.Name(), "codex")
+	var codexDraftParts []string
+	var codexPendingLast string
+	codexVerboseStreamed := false
 
 	for event := range state.agentSession.Events() {
 		if e.ctx.Err() != nil {
@@ -612,7 +616,8 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 					progress.observeThinking(preview)
 					// Throttle frequent thought updates to avoid flood while keeping one draft fresh.
 					if time.Since(lastDraftAt) >= 1200*time.Millisecond {
-						if updated := e.upsertDraft(p, replyCtx, &draftCtx, progress.render(e.i18n.CurrentLang(), false)); updated {
+						rendered := renderConciseDraftContent(e.i18n.CurrentLang(), progress, codexDraftParts, false)
+						if updated := e.upsertDraft(p, replyCtx, &draftCtx, rendered); updated {
 							lastDraftAt = time.Now()
 						}
 					}
@@ -627,7 +632,8 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				e.send(p, replyCtx, fmt.Sprintf(e.i18n.T(MsgTool), toolCount, event.ToolName, inputPreview))
 			case progressOutputConcise:
 				progress.observeTool(toolCount, event.ToolName)
-				if updated := e.upsertDraft(p, replyCtx, &draftCtx, progress.render(e.i18n.CurrentLang(), false)); updated {
+				rendered := renderConciseDraftContent(e.i18n.CurrentLang(), progress, codexDraftParts, false)
+				if updated := e.upsertDraft(p, replyCtx, &draftCtx, rendered); updated {
 					lastDraftAt = time.Now()
 				}
 			}
@@ -635,6 +641,25 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		case EventText:
 			if event.Content != "" {
 				textParts = append(textParts, event.Content)
+				if isCodex {
+					switch mode {
+					case progressOutputVerbose:
+						for _, chunk := range splitMessage(event.Content, maxPlatformMessageLen) {
+							e.send(p, replyCtx, chunk)
+						}
+						codexVerboseStreamed = true
+					case progressOutputConcise:
+						// We keep one message pending so we can treat only the final message as final output.
+						if codexPendingLast != "" {
+							codexDraftParts = append(codexDraftParts, codexPendingLast)
+							rendered := renderConciseDraftContent(e.i18n.CurrentLang(), progress, codexDraftParts, false)
+							if updated := e.upsertDraft(p, replyCtx, &draftCtx, rendered); updated {
+								lastDraftAt = time.Now()
+							}
+						}
+						codexPendingLast = event.Content
+					}
+				}
 			}
 			if event.SessionID != "" && session.AgentSessionID == "" {
 				session.AgentSessionID = event.SessionID
@@ -682,12 +707,78 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				session.AgentSessionID = event.SessionID
 			}
 
+			lang := e.i18n.CurrentLang()
 			fullResponse := event.Content
-			if fullResponse == "" && len(textParts) > 0 {
-				fullResponse = strings.Join(textParts, "")
-			}
-			if fullResponse == "" {
-				fullResponse = e.i18n.T(MsgEmptyResponse)
+			finalOutbound := ""
+
+			if isCodex {
+				switch mode {
+				case progressOutputVerbose:
+					fullResponse = joinAgentMessagesWithSeparator(textParts, lang)
+					if fullResponse == "" {
+						fullResponse = event.Content
+					}
+					if fullResponse == "" {
+						fullResponse = e.i18n.T(MsgEmptyResponse)
+					}
+					// In verbose mode, agent messages have already been streamed individually.
+					if !codexVerboseStreamed {
+						finalOutbound = fullResponse
+					}
+				case progressOutputQuiet:
+					fullResponse = joinAgentMessagesWithSeparator(textParts, lang)
+					if fullResponse == "" {
+						fullResponse = event.Content
+					}
+					if fullResponse == "" {
+						fullResponse = e.i18n.T(MsgEmptyResponse)
+					}
+					finalOutbound = fullResponse
+				default:
+					finalMessage := codexPendingLast
+					if finalMessage == "" && len(textParts) > 0 {
+						finalMessage = textParts[len(textParts)-1]
+					}
+					if finalMessage == "" {
+						finalMessage = event.Content
+					}
+
+					historyParts := append([]string{}, codexDraftParts...)
+					if finalMessage != "" {
+						historyParts = append(historyParts, finalMessage)
+					}
+					fullResponse = joinAgentMessagesWithSeparator(historyParts, lang)
+					if fullResponse == "" {
+						if finalMessage != "" {
+							fullResponse = finalMessage
+						} else {
+							fullResponse = e.i18n.T(MsgEmptyResponse)
+						}
+					}
+
+					if draftCtx != nil {
+						rendered := renderConciseDraftContent(lang, progress, codexDraftParts, true)
+						e.updateDraft(p, draftCtx, rendered)
+					}
+
+					if finalMessage != "" {
+						finalOutbound = finalMessage
+					} else {
+						finalOutbound = fullResponse
+					}
+				}
+			} else {
+				if fullResponse == "" && len(textParts) > 0 {
+					fullResponse = strings.Join(textParts, "")
+				}
+				if fullResponse == "" {
+					fullResponse = e.i18n.T(MsgEmptyResponse)
+				}
+				finalOutbound = fullResponse
+				if mode == progressOutputConcise && draftCtx != nil {
+					rendered := renderConciseDraftContent(lang, progress, nil, true)
+					e.updateDraft(p, draftCtx, rendered)
+				}
 			}
 
 			session.AddHistory("assistant", fullResponse)
@@ -699,11 +790,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				"tools", toolCount,
 				"response_len", len(fullResponse),
 			)
-			if mode == progressOutputConcise && draftCtx != nil {
-				e.updateDraft(p, draftCtx, progress.render(e.i18n.CurrentLang(), true))
+			if strings.TrimSpace(finalOutbound) == "" {
+				return
 			}
 
-			for _, chunk := range splitMessage(fullResponse, maxPlatformMessageLen) {
+			for _, chunk := range splitMessage(finalOutbound, maxPlatformMessageLen) {
 				if err := p.Send(e.ctx, replyCtx, chunk); err != nil {
 					slog.Error("failed to send reply", "error", err)
 					return
@@ -715,7 +806,8 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			if event.Error != nil {
 				slog.Error("agent error", "error", event.Error)
 				if mode == progressOutputConcise && draftCtx != nil {
-					e.updateDraft(p, draftCtx, progress.render(e.i18n.CurrentLang(), true))
+					rendered := renderConciseDraftContent(e.i18n.CurrentLang(), progress, codexDraftParts, true)
+					e.updateDraft(p, draftCtx, rendered)
 				}
 				e.send(p, replyCtx, fmt.Sprintf(e.i18n.T(MsgError), event.Error))
 			}
@@ -731,9 +823,17 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 		state.mu.Lock()
 		p := state.platform
 		replyCtx := state.replyCtx
+		mode := normalizeProgressOutputMode(state.progressMode)
 		state.mu.Unlock()
 
+		if isCodex && mode == progressOutputVerbose && codexVerboseStreamed {
+			return
+		}
+
 		fullResponse := strings.Join(textParts, "")
+		if isCodex {
+			fullResponse = joinAgentMessagesWithSeparator(textParts, e.i18n.CurrentLang())
+		}
 		session.AddHistory("assistant", fullResponse)
 		for _, chunk := range splitMessage(fullResponse, maxPlatformMessageLen) {
 			e.send(p, replyCtx, chunk)
@@ -790,6 +890,49 @@ func (ps *conciseProgressState) render(lang Language, done bool) string {
 		"📝 Progress Summary (concise)\nStatus: %s\nThinking events: %d\nTool calls: %d\nLatest tool: %s\nLatest thought: %s",
 		status, ps.thinkingCount, ps.toolCount, lastTool, truncate(lastThinking, 140),
 	)
+}
+
+func joinAgentMessagesWithSeparator(parts []string, lang Language) string {
+	var kept []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			kept = append(kept, p)
+		}
+	}
+	if len(kept) == 0 {
+		return ""
+	}
+
+	sep := "\n\n-----\n\n"
+	var sb strings.Builder
+	for i, p := range kept {
+		if i > 0 {
+			sb.WriteString(sep)
+		}
+		if lang == LangChinese {
+			sb.WriteString(fmt.Sprintf("第 %d 段:\n%s", i+1, p))
+		} else {
+			sb.WriteString(fmt.Sprintf("Part %d:\n%s", i+1, p))
+		}
+	}
+	return sb.String()
+}
+
+func renderConciseDraftContent(lang Language, progress conciseProgressState, nonFinalParts []string, done bool) string {
+	base := progress.render(lang, done)
+	nonFinal := joinAgentMessagesWithSeparator(nonFinalParts, lang)
+	if nonFinal == "" {
+		return truncate(base, 3600)
+	}
+
+	var content string
+	if lang == LangChinese {
+		content = fmt.Sprintf("%s\n\n⏳ 中间 agent_message（非最终结论）\n\n%s", base, nonFinal)
+	} else {
+		content = fmt.Sprintf("%s\n\n⏳ Interim agent_message (not final)\n\n%s", base, nonFinal)
+	}
+	return truncate(content, 3600)
 }
 
 func normalizeProgressOutputMode(mode progressOutputMode) progressOutputMode {

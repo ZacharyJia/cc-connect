@@ -24,9 +24,9 @@ import (
 	_ "github.com/chenhg5/cc-connect/platform/discord"
 	_ "github.com/chenhg5/cc-connect/platform/feishu"
 	_ "github.com/chenhg5/cc-connect/platform/line"
+	_ "github.com/chenhg5/cc-connect/platform/qq"
 	_ "github.com/chenhg5/cc-connect/platform/slack"
 	_ "github.com/chenhg5/cc-connect/platform/telegram"
-	_ "github.com/chenhg5/cc-connect/platform/qq"
 	_ "github.com/chenhg5/cc-connect/platform/wecom"
 )
 
@@ -259,19 +259,6 @@ func createEngine(cfg *config.Config) *core.Engine {
 		}
 	}
 
-	var platforms []core.Platform
-	for _, pc := range cfg.Platforms {
-		p, err := core.CreatePlatform(pc.Type, pc.Options)
-		if err != nil {
-			slog.Error("failed to create platform", "type", pc.Type, "error", err)
-			os.Exit(1)
-		}
-		platforms = append(platforms, p)
-	}
-
-	// Session file path
-	sessionFile := sessionStorePath(cfg.DataDir, "default", "")
-
 	// Parse language setting
 	var lang core.Language
 	switch cfg.Language {
@@ -282,6 +269,28 @@ func createEngine(cfg *config.Config) *core.Engine {
 	default:
 		lang = core.LangAuto
 	}
+
+	var platforms []core.Platform
+	for _, pc := range cfg.Platforms {
+		opts := pc.Options
+		if opts == nil {
+			opts = map[string]any{}
+		}
+		if pc.Type == "telegram" {
+			if _, exists := opts["language"]; !exists {
+				opts["language"] = string(lang) // "en" / "zh" / ""
+			}
+		}
+		p, err := core.CreatePlatform(pc.Type, opts)
+		if err != nil {
+			slog.Error("failed to create platform", "type", pc.Type, "error", err)
+			os.Exit(1)
+		}
+		platforms = append(platforms, p)
+	}
+
+	// Session file path
+	sessionFile := sessionStorePath(cfg.DataDir, "default", "")
 
 	engine := core.NewEngine("default", agent, platforms, sessionFile, lang, cfg.AllowUsers)
 

@@ -24,10 +24,11 @@ type replyContext struct {
 }
 
 type Platform struct {
-	token   string
-	bot     *tgbotapi.BotAPI
-	handler core.MessageHandler
-	cancel  context.CancelFunc
+	token    string
+	language string // "en" / "zh" / ""(auto)
+	bot      *tgbotapi.BotAPI
+	handler  core.MessageHandler
+	cancel   context.CancelFunc
 }
 
 func New(opts map[string]any) (core.Platform, error) {
@@ -35,7 +36,15 @@ func New(opts map[string]any) (core.Platform, error) {
 	if token == "" {
 		return nil, fmt.Errorf("telegram: token is required")
 	}
-	return &Platform{token: token}, nil
+	lang, _ := opts["language"].(string)
+	lang = strings.ToLower(strings.TrimSpace(lang))
+	switch lang {
+	case "zh", "en":
+		// keep as is
+	default:
+		lang = ""
+	}
+	return &Platform{token: token, language: lang}, nil
 }
 
 func (p *Platform) Name() string { return "telegram" }
@@ -50,6 +59,7 @@ func (p *Platform) Start(handler core.MessageHandler) error {
 	p.bot = bot
 
 	slog.Info("telegram: connected", "bot", bot.Self.UserName)
+	p.registerCommands()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
@@ -208,6 +218,69 @@ func (p *Platform) Start(handler core.MessageHandler) error {
 	}()
 
 	return nil
+}
+
+func (p *Platform) registerCommands() {
+	en := []tgbotapi.BotCommand{
+		{Command: "new", Description: "Start a new session"},
+		{Command: "list", Description: "List sessions"},
+		{Command: "switch", Description: "Switch session"},
+		{Command: "current", Description: "Show current session"},
+		{Command: "history", Description: "Show recent messages"},
+		{Command: "provider", Description: "Manage providers"},
+		{Command: "allow", Description: "Pre-allow a tool"},
+		{Command: "mode", Description: "View or switch mode"},
+		{Command: "lang", Description: "View or switch language"},
+		{Command: "quiet", Description: "Toggle progress messages"},
+		{Command: "stop", Description: "Stop current execution"},
+		{Command: "cron", Description: "Manage scheduled tasks"},
+		{Command: "version", Description: "Show cc-connect version"},
+		{Command: "help", Description: "Show help"},
+	}
+
+	zh := []tgbotapi.BotCommand{
+		{Command: "new", Description: "创建新会话"},
+		{Command: "list", Description: "列出会话"},
+		{Command: "switch", Description: "切换会话"},
+		{Command: "current", Description: "当前会话"},
+		{Command: "history", Description: "最近消息"},
+		{Command: "provider", Description: "管理提供商"},
+		{Command: "allow", Description: "预授权工具"},
+		{Command: "mode", Description: "查看或切换模式"},
+		{Command: "lang", Description: "查看或切换语言"},
+		{Command: "quiet", Description: "开关进度消息"},
+		{Command: "stop", Description: "停止当前执行"},
+		{Command: "cron", Description: "管理定时任务"},
+		{Command: "version", Description: "查看版本"},
+		{Command: "help", Description: "帮助"},
+	}
+
+	switch p.language {
+	case "zh":
+		// Config language is zh: make Chinese the default command list.
+		if _, err := p.bot.Request(tgbotapi.NewSetMyCommands(zh...)); err != nil {
+			slog.Warn("telegram: failed to set zh bot commands", "error", err)
+			return
+		}
+		slog.Info("telegram: bot commands registered", "count", len(zh), "language", "zh")
+	case "en":
+		if _, err := p.bot.Request(tgbotapi.NewSetMyCommands(en...)); err != nil {
+			slog.Warn("telegram: failed to set bot commands", "error", err)
+			return
+		}
+		slog.Info("telegram: bot commands registered", "count", len(en), "language", "en")
+	default:
+		// Auto/default: English as default, plus zh override for zh clients.
+		if _, err := p.bot.Request(tgbotapi.NewSetMyCommands(en...)); err != nil {
+			slog.Warn("telegram: failed to set bot commands", "error", err)
+			return
+		}
+		scope := tgbotapi.NewBotCommandScopeDefault()
+		if _, err := p.bot.Request(tgbotapi.NewSetMyCommandsWithScopeAndLanguage(scope, "zh", zh...)); err != nil {
+			slog.Warn("telegram: failed to set zh bot commands", "error", err)
+		}
+		slog.Info("telegram: bot commands registered", "count", len(en), "language", "auto")
+	}
 }
 
 func (p *Platform) Reply(ctx context.Context, rctx any, content string) error {

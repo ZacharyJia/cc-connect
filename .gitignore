@@ -1,5 +1,6 @@
-/cc-connect
+/cx-connect
 config.toml
+.cx-connect/
 .cc-connect/
 *.exe
 *.dll

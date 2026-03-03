@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/chenhg5/cc-connect/core"
+	"github.com/ZacharyJia/cx-connect/core"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"

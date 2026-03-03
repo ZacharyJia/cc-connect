@@ -1,48 +1,48 @@
-# cc-connect Installation & Configuration Guide
+# cx-connect Installation & Configuration Guide
 
-> **This document is designed to be read by AI coding agents (Claude Code, Cursor, Gemini CLI, etc.) to help users install and configure cc-connect.** You can feed this file directly to your AI agent.
+> **This document is designed to be read by AI coding agents (Claude Code, Cursor, Gemini CLI, etc.) to help users install and configure cx-connect.** You can feed this file directly to your AI agent.
 
-## What is cc-connect?
+## What is cx-connect?
 
-cc-connect bridges local AI coding assistants to messaging platforms (Feishu, DingTalk, Telegram, Slack, Discord, LINE, WeChat Work, QQ), enabling bidirectional chat with your local AI agent from anywhere.
+cx-connect bridges local AI coding assistants to messaging platforms (Feishu, DingTalk, Telegram, Slack, Discord, LINE, WeChat Work, QQ), enabling bidirectional chat with your local AI agent from anywhere.
 
-GitHub: https://github.com/chenhg5/cc-connect
+GitHub: https://github.com/ZacharyJia/cx-connect
 
-## Step 1: Install cc-connect
+## Step 1: Install cx-connect
 
 ### Option A: npm (recommended for most users)
 
 ```bash
-npm install -g cc-connect
+npm install -g cx-connect
 ```
 
 Install beta version:
 
 ```bash
-npm install -g cc-connect@beta
+npm install -g cx-connect@beta
 ```
 
-After installation, the `cc-connect` binary will be available globally.
+After installation, the `cx-connect` binary will be available globally.
 
 ### Option B: Download binary from GitHub Releases
 
-Go to https://github.com/chenhg5/cc-connect/releases and download the binary for your platform:
+Go to https://github.com/ZacharyJia/cx-connect/releases and download the binary for your platform:
 
-- `cc-connect-linux-amd64` / `cc-connect-linux-arm64`
-- `cc-connect-darwin-amd64` / `cc-connect-darwin-arm64`
-- `cc-connect-windows-amd64.exe`
+- `cx-connect-linux-amd64` / `cx-connect-linux-arm64`
+- `cx-connect-darwin-amd64` / `cx-connect-darwin-arm64`
+- `cx-connect-windows-amd64.exe`
 
 ```bash
 # Example for Linux amd64:
-curl -L -o cc-connect https://github.com/chenhg5/cc-connect/releases/latest/download/cc-connect-linux-amd64
-chmod +x cc-connect
-sudo mv cc-connect /usr/local/bin/
+curl -L -o cx-connect https://github.com/ZacharyJia/cx-connect/releases/latest/download/cx-connect-linux-amd64
+chmod +x cx-connect
+sudo mv cx-connect /usr/local/bin/
 ```
 
 On macOS, you may need to remove the quarantine attribute:
 
 ```bash
-xattr -d com.apple.quarantine cc-connect
+xattr -d com.apple.quarantine cx-connect
 ```
 
 ### Option C: Build from source
@@ -50,15 +50,15 @@ xattr -d com.apple.quarantine cc-connect
 Requires Go 1.22+.
 
 ```bash
-git clone https://github.com/chenhg5/cc-connect.git
-cd cc-connect
+git clone https://github.com/ZacharyJia/cx-connect.git
+cd cx-connect
 make build
-# Binary will be at ./cc-connect
+# Binary will be at ./cx-connect
 ```
 
 ## Step 2: Install your AI Agent
 
-cc-connect currently supports Claude Code. Make sure it is installed:
+cx-connect currently supports Claude Code. Make sure it is installed:
 
 ```bash
 # Install Claude Code CLI (requires Node.js)
@@ -73,20 +73,20 @@ claude --version
 
 ## Step 3: Create config.toml
 
-cc-connect looks for config in this order:
+cx-connect looks for config in this order:
 1. `-config <path>` flag (explicit)
 2. `./config.toml` (current directory)
-3. `~/.cc-connect/config.toml` (global, **recommended**)
+3. `~/.cx-connect/config.toml` (global, **recommended**)
 
-If no config file exists, running `cc-connect` will auto-create a starter template at `~/.cc-connect/config.toml`.
+If no config file exists, running `cx-connect` will auto-create a starter template at `~/.cx-connect/config.toml`.
 
 **Recommended: use the global config location:**
 
 ```bash
-mkdir -p ~/.cc-connect
+mkdir -p ~/.cx-connect
 # If you cloned the repo, copy the example:
-cp config.example.toml ~/.cc-connect/config.toml
-# Or just run cc-connect once — it will create a starter config automatically
+cp config.example.toml ~/.cx-connect/config.toml
+# Or just run cx-connect once — it will create a starter config automatically
 ```
 
 You can also use a local config in the current directory:
@@ -295,7 +295,7 @@ Connection: HTTP Webhook (you need ngrok, cloudflared, or a server with public I
    - URL: `https://<your-public-domain>:<port>/wecom/callback`
    - Token: any random string
    - EncodingAESKey: click "Random Generate" (43 chars)
-   - **Start cc-connect FIRST, then save** (to pass URL verification)
+   - **Start cx-connect FIRST, then save** (to pass URL verification)
 5. **Trusted IP** → add your server's outbound public IP
 6. (Optional) **WeChat Plugin** → scan QR to link personal WeChat
 
@@ -345,27 +345,27 @@ allow_from = "*"                 # allowed QQ user IDs: "12345,67890" or "*" for
 
 ---
 
-## Step 5: Run cc-connect
+## Step 5: Run cx-connect
 
-**Important: If you are running inside a Claude Code session** (e.g., Claude Code helped you install and configure cc-connect), you must unset the `CLAUDECODE` environment variable before starting, otherwise Claude Code will refuse to launch as a subprocess:
+**Important: If you are running inside a Claude Code session** (e.g., Claude Code helped you install and configure cx-connect), you must unset the `CLAUDECODE` environment variable before starting, otherwise Claude Code will refuse to launch as a subprocess:
 
 ```bash
-unset CLAUDECODE && cc-connect
+unset CLAUDECODE && cx-connect
 ```
 
-Alternatively, open a **separate terminal** and run cc-connect there — this avoids the issue entirely.
+Alternatively, open a **separate terminal** and run cx-connect there — this avoids the issue entirely.
 
 **Normal startup:**
 
 ```bash
 # Run with config.toml in current directory
-cc-connect
+cx-connect
 
 # Or specify config path
-cc-connect -config /path/to/config.toml
+cx-connect -config /path/to/config.toml
 
 # Check version
-cc-connect --version
+cx-connect --version
 ```
 
 You should see logs like:
@@ -373,7 +373,7 @@ You should see logs like:
 ```
 level=INFO msg="platform started" project=my-project platform=feishu
 level=INFO msg="engine started" project=my-project agent=claudecode platforms=1
-level=INFO msg="cc-connect is running" projects=1
+level=INFO msg="cx-connect is running" projects=1
 ```
 
 ## Step 6: Chat Commands
@@ -402,7 +402,7 @@ During a session, Claude may ask for tool permissions. Reply:
 
 ## Multi-Project Setup
 
-A single cc-connect process can manage multiple projects. Each project has its own agent, work directory, and platforms:
+A single cx-connect process can manage multiple projects. Each project has its own agent, work directory, and platforms:
 
 ```toml
 [[projects]]
@@ -480,38 +480,38 @@ app_token = "xapp-xxx"
 ### Check current version
 
 ```bash
-cc-connect --version
+cx-connect --version
 ```
 
 ### npm users
 
 ```bash
-npm update -g cc-connect
+npm update -g cx-connect
 ```
 
 ### Binary users
 
-Check the latest release at https://github.com/chenhg5/cc-connect/releases and compare with your local version. To upgrade:
+Check the latest release at https://github.com/ZacharyJia/cx-connect/releases and compare with your local version. To upgrade:
 
 ```bash
 # Linux/macOS — replace with your platform suffix
-curl -L -o /usr/local/bin/cc-connect https://github.com/chenhg5/cc-connect/releases/latest/download/cc-connect-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
-chmod +x /usr/local/bin/cc-connect
+curl -L -o /usr/local/bin/cx-connect https://github.com/ZacharyJia/cx-connect/releases/latest/download/cx-connect-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+chmod +x /usr/local/bin/cx-connect
 ```
 
 ### Source users
 
 ```bash
-cd cc-connect
+cd cx-connect
 git pull
 make build
 ```
 
-After upgrading, restart the running cc-connect process.
+After upgrading, restart the running cx-connect process.
 
 ## Beta Features
 
-The following features are available in beta (`npm install -g cc-connect@beta` or `cc-connect update --pre`):
+The following features are available in beta (`npm install -g cx-connect@beta` or `cx-connect update --pre`):
 
 - **Codex Agent**: OpenAI Codex CLI integration (`codex exec --json`)
 - **Cursor Agent**: Cursor Agent CLI integration (`agent --print --output-format stream-json`)
@@ -519,12 +519,12 @@ The following features are available in beta (`npm install -g cc-connect@beta` o
 - **Voice Messages (STT)**: Speech-to-text via Whisper API (OpenAI / Groq / SiliconFlow). Requires `ffmpeg` and `[speech]` config.
 - **Image Messages**: Send images to Claude Code for multimodal analysis
 - **API Provider Management**: Runtime switching between API providers via `/provider` command or CLI
-- **CLI Send**: `cc-connect send` to inject messages into active sessions from external processes
+- **CLI Send**: `cx-connect send` to inject messages into active sessions from external processes
 
 ## Troubleshooting
 
 - **"session already in use"** — A previous Claude Code process may still be running. Use `/new` to start a fresh session.
-- **No response from bot** — Check `cc-connect` logs. Set `level = "debug"` in `[log]` for verbose output.
+- **No response from bot** — Check `cx-connect` logs. Set `level = "debug"` in `[log]` for verbose output.
 - **WeChat Work can't send messages** — Ensure your outbound IP is in the Trusted IP whitelist. If using a proxy, check the proxy is reachable.
 - **LINE/WeChat Work can't receive messages** — Ensure your webhook URL is publicly accessible (ngrok/cloudflared running).
-- **macOS binary won't open** — Run `xattr -d com.apple.quarantine cc-connect` to remove quarantine flag.
+- **macOS binary won't open** — Run `xattr -d com.apple.quarantine cx-connect` to remove quarantine flag.

@@ -1,4 +1,4 @@
-# cc-connect
+# cx-connect
 
 English | [中文](./README.zh-CN.md)
 
@@ -23,7 +23,7 @@ All components are decoupled via Go interfaces — fully pluggable and extensibl
 ## Screenshot
 
 <p align="center">
-  <img src="docs/images/screenshot/cc-connect-discord.png" alt="Discord" width="600" />
+  <img src="docs/images/screenshot/cx-connect-discord.png" alt="Discord" width="600" />
 </p>
 
 ## Support Matrix
@@ -56,7 +56,7 @@ All components are decoupled via Go interfaces — fully pluggable and extensibl
 | Feature | Voice Messages (STT) | ✅ Beta — Whisper API (OpenAI / Groq) + ffmpeg |
 | Feature | Image Messages | ✅ Beta — Multimodal (Claude Code) |
 | Feature | API Provider Management | ✅ Beta — Runtime provider switching |
-| Feature | CLI Send (`cc-connect send`) | ✅ Beta — Send messages to sessions via CLI |
+| Feature | CLI Send (`cx-connect send`) | ✅ Beta — Send messages to sessions via CLI |
 
 ## Quick Start
 
@@ -72,7 +72,7 @@ All components are decoupled via Go interfaces — fully pluggable and extensibl
 Send this to Claude Code or any AI coding agent, and it will handle the entire installation and configuration for you:
 
 ```
-Please refer to https://raw.githubusercontent.com/chenhg5/cc-connect/refs/heads/main/INSTALL.md to help me install and configure cc-connect
+Please refer to https://raw.githubusercontent.com/ZacharyJia/cx-connect/refs/heads/main/INSTALL.md to help me install and configure cx-connect
 ```
 
 ### Manual Install
@@ -80,29 +80,29 @@ Please refer to https://raw.githubusercontent.com/chenhg5/cc-connect/refs/heads/
 **Via npm:**
 
 ```bash
-npm install -g cc-connect
+npm install -g cx-connect
 ```
 
 install beta version:
 
 ```bash
-npm install -g cc-connect@beta
+npm install -g cx-connect@beta
 ```
 
-**Download binary from [GitHub Releases](https://github.com/chenhg5/cc-connect/releases):**
+**Download binary from [GitHub Releases](https://github.com/ZacharyJia/cx-connect/releases):**
 
 ```bash
 # Linux amd64
-curl -L -o cc-connect https://github.com/chenhg5/cc-connect/releases/latest/download/cc-connect-linux-amd64
-chmod +x cc-connect
-sudo mv cc-connect /usr/local/bin/
+curl -L -o cx-connect https://github.com/ZacharyJia/cx-connect/releases/latest/download/cx-connect-linux-amd64
+chmod +x cx-connect
+sudo mv cx-connect /usr/local/bin/
 ```
 
 **Build from source (requires Go 1.22+):**
 
 ```bash
-git clone https://github.com/chenhg5/cc-connect.git
-cd cc-connect
+git clone https://github.com/ZacharyJia/cx-connect.git
+cd cx-connect
 make build
 ```
 
@@ -110,9 +110,9 @@ make build
 
 ```bash
 # Global config (recommended)
-mkdir -p ~/.cc-connect
-cp config.example.toml ~/.cc-connect/config.toml
-vim ~/.cc-connect/config.toml
+mkdir -p ~/.cx-connect
+cp config.example.toml ~/.cx-connect/config.toml
+vim ~/.cx-connect/config.toml
 
 # Or local config (also supported)
 cp config.example.toml config.toml
@@ -121,23 +121,23 @@ cp config.example.toml config.toml
 ### Run
 
 ```bash
-./cc-connect                              # auto: ./config.toml → ~/.cc-connect/config.toml
-./cc-connect -config /path/to/config.toml # explicit path
-./cc-connect --version                    # show version info
+./cx-connect                              # auto: ./config.toml → ~/.cx-connect/config.toml
+./cx-connect -config /path/to/config.toml # explicit path
+./cx-connect --version                    # show version info
 ```
 
 ### Upgrade
 
 ```bash
 # npm
-npm install -g cc-connect
+npm install -g cx-connect
 
 # Binary self-update
-cc-connect update
+cx-connect update
 
 # Beta / pre-release channel
-npm install -g cc-connect@beta
-cc-connect update --pre
+npm install -g cx-connect@beta
+cx-connect update --pre
 ```
 
 ## Platform Setup Guides
@@ -296,10 +296,10 @@ env = { CLAUDE_CODE_USE_BEDROCK = "1", AWS_PROFILE = "bedrock" }
 **Via CLI:**
 
 ```bash
-cc-connect provider add --project my-backend --name relay --api-key sk-xxx --base-url https://api.relay.com
-cc-connect provider add --project my-backend --name bedrock --env CLAUDE_CODE_USE_BEDROCK=1,AWS_PROFILE=bedrock
-cc-connect provider list --project my-backend
-cc-connect provider remove --project my-backend --name relay
+cx-connect provider add --project my-backend --name relay --api-key sk-xxx --base-url https://api.relay.com
+cx-connect provider add --project my-backend --name bedrock --env CLAUDE_CODE_USE_BEDROCK=1,AWS_PROFILE=bedrock
+cx-connect provider list --project my-backend
+cx-connect provider remove --project my-backend --name relay
 ```
 
 **Import from [cc-switch](https://github.com/SaladDay/cc-switch-cli):**
@@ -307,9 +307,9 @@ cc-connect provider remove --project my-backend --name relay
 If you already use cc-switch to manage providers, import them with one command (requires `sqlite3`):
 
 ```bash
-cc-connect provider import --project my-backend
-cc-connect provider import --project my-backend --type claude     # only Claude providers
-cc-connect provider import --db-path ~/.cc-switch/cc-switch.db    # explicit DB path
+cx-connect provider import --project my-backend
+cx-connect provider import --project my-backend --type claude     # only Claude providers
+cx-connect provider import --db-path ~/.cc-switch/cc-switch.db    # explicit DB path
 ```
 
 ### Manage Providers in Chat
@@ -338,7 +338,7 @@ The `env` map in provider config lets you set arbitrary environment variables fo
 
 ## Voice Messages (Speech-to-Text) `Beta`
 
-Send voice messages directly — cc-connect transcribes them to text using a configurable STT provider, then forwards the text to the agent.
+Send voice messages directly — cx-connect transcribes them to text using a configurable STT provider, then forwards the text to the agent.
 
 **Supported platforms:** Feishu, WeChat Work, Telegram, LINE, Discord, Slack
 
@@ -368,7 +368,7 @@ api_key = "sk-xxx"     # your OpenAI API key
 ### How It Works
 
 1. User sends a voice message on any supported platform
-2. cc-connect downloads the audio from the platform
+2. cx-connect downloads the audio from the platform
 3. If the format needs conversion (AMR, OGG → MP3), `ffmpeg` handles it
 4. Audio is sent to the Whisper API for transcription
 5. Transcribed text is shown to the user and forwarded to the agent
@@ -409,7 +409,7 @@ During a session, the agent may request tool permissions. Reply **allow** / **de
 
 ## Configuration
 
-Each `[[projects]]` entry binds one code directory to its own agent and platforms. A single cc-connect process can manage multiple projects simultaneously.
+Each `[[projects]]` entry binds one code directory to its own agent and platforms. A single cx-connect process can manage multiple projects simultaneously.
 
 ```toml
 # Project 1
@@ -459,7 +459,7 @@ Implement the `core.Platform` interface and register it:
 ```go
 package myplatform
 
-import "github.com/chenhg5/cc-connect/core"
+import "github.com/ZacharyJia/cx-connect/core"
 
 func init() {
     core.RegisterPlatform("myplatform", New)
@@ -472,10 +472,10 @@ func New(opts map[string]any) (core.Platform, error) {
 // Implement Name(), Start(), Reply(), Send(), Stop()
 ```
 
-Then add a blank import in `cmd/cc-connect/main.go`:
+Then add a blank import in `cmd/cx-connect/main.go`:
 
 ```go
-_ "github.com/chenhg5/cc-connect/platform/myplatform"
+_ "github.com/ZacharyJia/cx-connect/platform/myplatform"
 ```
 
 ### Adding a New Agent
@@ -485,8 +485,8 @@ Same pattern — implement `core.Agent` and register via `core.RegisterAgent`.
 ## Project Structure
 
 ```
-cc-connect/
-├── cmd/cc-connect/          # Entrypoint
+cx-connect/
+├── cmd/cx-connect/          # Entrypoint
 │   └── main.go
 ├── core/                    # Core abstractions
 │   ├── interfaces.go        # Platform + Agent interfaces

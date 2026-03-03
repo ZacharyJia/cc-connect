@@ -15,7 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/chenhg5/cc-connect/config"
+	"github.com/ZacharyJia/cx-connect/config"
 )
 
 const (
@@ -539,7 +539,7 @@ func (e *Engine) getOrCreateInteractiveState(sessionKey string, p Platform, repl
 		state.mu.Unlock()
 	}
 
-	// Inject per-session env vars so the agent subprocess can call `cc-connect cron add` etc.
+	// Inject per-session env vars so the agent subprocess can call `cx-connect cron add` etc.
 	if inj, ok := e.agent.(SessionEnvInjector); ok {
 		env := []string{
 			"CC_PROJECT=" + e.name,
@@ -1822,11 +1822,11 @@ func (e *Engine) defaultSessionAbsDir(sessionName string) string {
 	if err != nil {
 		home = "."
 	}
-	return filepath.Join(home, ".cc-connect", "workspace", sanitizeSessionNameForPath(sessionName))
+	return filepath.Join(home, ".cx-connect", "workspace", sanitizeSessionNameForPath(sessionName))
 }
 
 func (e *Engine) defaultSessionDisplayDirName(sessionName string) string {
-	return filepath.Join("~", ".cc-connect", "workspace", sanitizeSessionNameForPath(sessionName))
+	return filepath.Join("~", ".cx-connect", "workspace", sanitizeSessionNameForPath(sessionName))
 }
 
 func sanitizeSessionNameForPath(name string) string {

@@ -304,7 +304,7 @@ var messages = map[MsgKey]map[Language]string{
 			"/quiet\n  Toggle thinking/tool progress\n\n" +
 			"/stop\n  Stop current execution\n\n" +
 			"/cron [add|list|del|enable|disable]\n  Manage scheduled tasks\n\n" +
-			"/version\n  Show cc-connect version\n\n" +
+			"/version\n  Show cx-connect version\n\n" +
 			"/help\n  Show this help\n\n" +
 			"Permission modes: default / edit / plan / yolo",
 		LangChinese: "📖 可用命令\n\n" +
@@ -321,7 +321,7 @@ var messages = map[MsgKey]map[Language]string{
 			"/quiet\n  开关思考和工具进度消息\n\n" +
 			"/stop\n  停止当前执行\n\n" +
 			"/cron [add|list|del|enable|disable]\n  管理定时任务\n\n" +
-			"/version\n  查看 cc-connect 版本\n\n" +
+			"/version\n  查看 cx-connect 版本\n\n" +
 			"/help\n  显示此帮助\n\n" +
 			"权限模式：default / edit / plan / yolo",
 	},
@@ -354,8 +354,8 @@ var messages = map[MsgKey]map[Language]string{
 		LangChinese: "当前 Agent 不支持 Provider 切换。",
 	},
 	MsgProviderNone: {
-		LangEnglish: "No provider configured. Using agent's default environment.\n\nAdd providers in `config.toml` or via `cc-connect provider add`.",
-		LangChinese: "未配置 Provider，使用 Agent 默认环境。\n\n可在 `config.toml` 中添加或使用 `cc-connect provider add` 命令。",
+		LangEnglish: "No provider configured. Using agent's default environment.\n\nAdd providers in `config.toml` or via `cx-connect provider add`.",
+		LangChinese: "未配置 Provider，使用 Agent 默认环境。\n\n可在 `config.toml` 中添加或使用 `cx-connect provider add` 命令。",
 	},
 	MsgProviderCurrent: {
 		LangEnglish: "📡 Active provider: **%s**\n\nUse `/provider list` to see all, `/provider switch <name>` to switch.",
@@ -366,8 +366,8 @@ var messages = map[MsgKey]map[Language]string{
 		LangChinese: "📡 **Provider 列表**\n\n",
 	},
 	MsgProviderListEmpty: {
-		LangEnglish: "No providers configured.\n\nAdd providers in `config.toml` or via `cc-connect provider add`.",
-		LangChinese: "未配置 Provider。\n\n可在 `config.toml` 中添加或使用 `cc-connect provider add` 命令。",
+		LangEnglish: "No providers configured.\n\nAdd providers in `config.toml` or via `cx-connect provider add`.",
+		LangChinese: "未配置 Provider。\n\n可在 `config.toml` 中添加或使用 `cx-connect provider add` 命令。",
 	},
 	MsgProviderSwitchHint: {
 		LangEnglish: "`/provider switch <name>` to switch",

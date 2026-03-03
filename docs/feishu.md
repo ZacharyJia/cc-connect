@@ -1,11 +1,11 @@
 # 飞书 (Feishu/Lark) 接入指南
 
-本文档介绍如何将 **cc-connect** 接入飞书，让你可以通过飞书机器人远程调用 Claude Code。
+本文档介绍如何将 **cx-connect** 接入飞书，让你可以通过飞书机器人远程调用 Claude Code。
 
 ## 前置要求
 
 - 飞书账号（个人或企业均可）
-- 一台可运行 cc-connect 的设备（无需公网 IP）
+- 一台可运行 cx-connect 的设备（无需公网 IP）
 - Claude Code 已安装并配置完成
 
 > 💡 **优势**：使用长连接模式，无需公网 IP、无需域名、无需反向代理（ngrok/frp）
@@ -29,7 +29,7 @@
 
 | 字段 | 填写建议 |
 |------|---------|
-| 应用名称 | `cc-connect` 或你喜欢的名称 |
+| 应用名称 | `cx-connect` 或你喜欢的名称 |
 | 应用描述 | `Claude Code 远程助手` |
 | 应用图标 | 上传一个喜欢的图标 |
 
@@ -50,11 +50,11 @@ App ID:     cli_axxxxxxxxxxxx
 App Secret: QhkMpxxxxxxxxxxxxxxxxxxxx
 ```
 
-> ⚠️ **重要**：请妥善保存这两个凭证，后续配置 cc-connect 时需要用到。App Secret 只会显示一次，如果忘记了需要重置。
+> ⚠️ **重要**：请妥善保存这两个凭证，后续配置 cx-connect 时需要用到。App Secret 只会显示一次，如果忘记了需要重置。
 
-### 2.3 配置到 cc-connect
+### 2.3 配置到 cx-connect
 
-将凭证配置到 cc-connect 的 `config.toml` 中：
+将凭证配置到 cx-connect 的 `config.toml` 中：
 
 ```toml
 [[projects]]
@@ -88,7 +88,7 @@ app_secret = "QhkMpxxxxxxxxxxxxxxxxxxxx"
 
 | 配置项 | 建议值 |
 |-------|--------|
-| 机器人名称 | `cc-connect` |
+| 机器人名称 | `cx-connect` |
 | 机器人描述 | `Claude Code 远程助手` |
 | 机器人头像 | 与应用图标一致 |
 
@@ -158,23 +158,23 @@ app_secret = "QhkMpxxxxxxxxxxxxxxxxxxxx"
 
 ---
 
-## 第六步：启动 cc-connect
+## 第六步：启动 cx-connect
 
 ### 6.1 启动服务
 
 ```bash
-cc-connect
+cx-connect
 # 或指定配置文件
-cc-connect -config /path/to/config.toml
+cx-connect -config /path/to/config.toml
 ```
 
 ### 6.2 验证连接
 
-启动后，cc-connect 会自动与飞书建立 WebSocket 长连接。你会在日志中看到：
+启动后，cx-connect 会自动与飞书建立 WebSocket 长连接。你会在日志中看到：
 
 ```
 level=INFO msg="platform started" project=my-project platform=feishu
-level=INFO msg="cc-connect is running" projects=1
+level=INFO msg="cx-connect is running" projects=1
 [Info] connected to wss://msg-frontier.feishu.cn/ws/v2?...
 ```
 
@@ -217,9 +217,9 @@ level=INFO msg="cc-connect is running" projects=1
 ```
 用户: 帮我分析一下当前项目的结构
 
-cc-connect: 🤔 思考中...
-cc-connect: 🔧 执行: Bash(ls -la)
-cc-connect: ✅ 这是一个 Node.js 项目，包含以下目录...
+cx-connect: 🤔 思考中...
+cx-connect: 🔧 执行: Bash(ls -la)
+cx-connect: ✅ 这是一个 Node.js 项目，包含以下目录...
 ```
 
 ---
@@ -240,7 +240,7 @@ cc-connect: ✅ 这是一个 Node.js 项目，包含以下目录...
 ┌─────────────────────────────────────────────────────────────┐
 │                      你的本地环境                            │
 │                                                              │
-│   cc-connect ◄──► Claude Code CLI ◄──► 你的项目代码         │
+│   cx-connect ◄──► Claude Code CLI ◄──► 你的项目代码         │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -262,12 +262,12 @@ cc-connect: ✅ 这是一个 Node.js 项目，包含以下目录...
 
 ### Q: 长连接断开怎么办？
 
-cc-connect 内置了自动重连机制，断开后会自动尝试重新连接。
+cx-connect 内置了自动重连机制，断开后会自动尝试重新连接。
 
 ### Q: 消息发送后没有响应？
 
 检查以下项目：
-1. cc-connect 服务是否正常运行
+1. cx-connect 服务是否正常运行
 2. 长连接是否建立成功（查看日志）
 3. 事件订阅是否配置了 `im.message.receive_v1`
 

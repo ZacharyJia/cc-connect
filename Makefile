@@ -1,6 +1,6 @@
-APP        := cc-connect
-MODULE     := github.com/chenhg5/cc-connect
-CMD        := ./cmd/cc-connect
+APP        := cx-connect
+MODULE     := github.com/ZacharyJia/cx-connect
+CMD        := ./cmd/cx-connect
 DIST       := dist
 
 VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")

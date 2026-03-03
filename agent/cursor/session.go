@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 	"unicode/utf8"
 
-	"github.com/chenhg5/cc-connect/core"
+	"github.com/ZacharyJia/cx-connect/core"
 )
 
 // cursorSession manages multi-turn conversations with the Cursor Agent CLI.

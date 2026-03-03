@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	githubRepo   = "chenhg5/cc-connect"
+	githubRepo   = "ZacharyJia/cx-connect"
 	githubAPI    = "https://api.github.com/repos/" + githubRepo + "/releases/latest"
 	githubAllAPI = "https://api.github.com/repos/" + githubRepo + "/releases"
 	downloadBase = "https://github.com/" + githubRepo + "/releases/download"
@@ -32,7 +32,7 @@ func runUpdate() {
 		}
 	}
 
-	fmt.Printf("cc-connect %s\n", version)
+	fmt.Printf("cx-connect %s\n", version)
 	if pre {
 		fmt.Println("Checking for updates (including pre-releases)...")
 	} else {
@@ -81,7 +81,7 @@ func runUpdate() {
 	}
 
 	fmt.Printf("Updated to %s\n", latest)
-	fmt.Println("Restart cc-connect to use the new version.")
+	fmt.Println("Restart cx-connect to use the new version.")
 }
 
 // fetchRelease returns the latest release. If pre=true, includes pre-releases.
@@ -166,7 +166,7 @@ func fetchLatestStableRelease() (*githubRelease, error) {
 func binaryAssetName(tag string) string {
 	goos := runtime.GOOS
 	goarch := runtime.GOARCH
-	name := fmt.Sprintf("cc-connect-%s-%s-%s", tag, goos, goarch)
+	name := fmt.Sprintf("cx-connect-%s-%s-%s", tag, goos, goarch)
 	if goos == "windows" {
 		name += ".exe"
 	}
@@ -194,7 +194,7 @@ func downloadToTemp(url string) (string, error) {
 		return "", fmt.Errorf("download returned HTTP %d", resp.StatusCode)
 	}
 
-	tmp, err := os.CreateTemp("", "cc-connect-update-*")
+	tmp, err := os.CreateTemp("", "cx-connect-update-*")
 	if err != nil {
 		return "", err
 	}
@@ -271,9 +271,9 @@ func checkUpdate() {
 		return
 	}
 	if isNewer(release.TagName, version) {
-		hint := "cc-connect update"
+		hint := "cx-connect update"
 		if release.Prerelease {
-			hint = "cc-connect update --pre"
+			hint = "cx-connect update --pre"
 		}
 		fmt.Fprintf(os.Stderr, "Update available: %s → %s (run: %s)\n", version, release.TagName, hint)
 	}

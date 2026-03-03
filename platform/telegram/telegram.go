@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chenhg5/cc-connect/core"
+	"github.com/ZacharyJia/cx-connect/core"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -235,7 +235,7 @@ func (p *Platform) registerCommands() {
 		{Command: "quiet", Description: "Toggle progress messages"},
 		{Command: "stop", Description: "Stop current execution"},
 		{Command: "cron", Description: "Manage scheduled tasks"},
-		{Command: "version", Description: "Show cc-connect version"},
+		{Command: "version", Description: "Show cx-connect version"},
 		{Command: "help", Description: "Show help"},
 	}
 

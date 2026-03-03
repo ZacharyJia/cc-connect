@@ -1,11 +1,11 @@
 # Telegram Setup Guide
 
-This guide walks you through connecting **cc-connect** to Telegram, so you can chat with your local Claude Code via a Telegram bot.
+This guide walks you through connecting **cx-connect** to Telegram, so you can chat with your local Claude Code via a Telegram bot.
 
 ## Prerequisites
 
 - A Telegram account
-- A machine that can run cc-connect (no public IP needed)
+- A machine that can run cx-connect (no public IP needed)
 - Claude Code installed and configured
 
 > 💡 **Advantage**: Uses Long Polling mode — no public IP, no domain, no reverse proxy needed.
@@ -26,7 +26,7 @@ Send the command `/newbot`. BotFather will ask you to provide a name and usernam
 
 ### 1.3 Set the Bot Name
 
-Enter a **display name** for your bot (e.g. `cc-connect`).
+Enter a **display name** for your bot (e.g. `cx-connect`).
 
 ### 1.4 Set the Bot Username
 
@@ -53,7 +53,7 @@ Keep your token secure...
 
 ---
 
-## Step 2: Configure cc-connect
+## Step 2: Configure cx-connect
 
 Add the token to your `config.toml`:
 
@@ -130,14 +130,14 @@ Enter a description — users will see this when they first open the bot.
 
 ---
 
-## Step 5: Start cc-connect
+## Step 5: Start cx-connect
 
 ### 5.1 Launch
 
 ```bash
-cc-connect
+cx-connect
 # Or specify a config file
-cc-connect -config /path/to/config.toml
+cx-connect -config /path/to/config.toml
 ```
 
 ### 5.2 Verify Connection
@@ -147,7 +147,7 @@ You should see logs like:
 ```
 level=INFO msg="telegram: connected" bot=cc_connect_bot
 level=INFO msg="platform started" project=my-project platform=telegram
-level=INFO msg="cc-connect is running" projects=1
+level=INFO msg="cx-connect is running" projects=1
 ```
 
 ---
@@ -174,9 +174,9 @@ level=INFO msg="cc-connect is running" projects=1
 ```
 User: Help me analyze the current project structure
 
-cc-connect: 🤔 Thinking...
-cc-connect: 🔧 Tool: Bash(ls -la)
-cc-connect: Here's the project structure...
+cx-connect: 🤔 Thinking...
+cx-connect: 🔧 Tool: Bash(ls -la)
+cx-connect: Here's the project structure...
 ```
 
 ---
@@ -196,7 +196,7 @@ cc-connect: Here's the project structure...
 ┌─────────────────────────────────────────────────────────────┐
 │                    Your Local Machine                         │
 │                                                              │
-│   cc-connect ◄──► Claude Code CLI ◄──► Your Project Code    │
+│   cx-connect ◄──► Claude Code CLI ◄──► Your Project Code    │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -221,9 +221,9 @@ cc-connect: Here's the project structure...
 ### Q: Bot doesn't respond to messages?
 
 Check the following:
-1. Is cc-connect running?
+1. Is cx-connect running?
 2. Is the bot token correct?
-3. Have you sent a message after starting cc-connect? (The bot only receives messages after startup)
+3. Have you sent a message after starting cx-connect? (The bot only receives messages after startup)
 
 ### Q: How to regenerate the token?
 

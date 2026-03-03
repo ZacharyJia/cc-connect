@@ -1,5 +1,5 @@
-# cc-connect configuration
-# cc-connect 配置文件
+# cx-connect configuration
+# cx-connect 配置文件
 #
 # Copy this file to config.toml and fill in your credentials.
 # 复制此文件为 config.toml，填入你的凭证信息。
@@ -24,7 +24,7 @@ mode = "default"
 # allowed_tools = ["Read", "Grep", "Glob", "Bash", "Edit", "Write"]
 
 # Optional: API providers — switch between them via /provider command in chat
-# or via CLI: cc-connect provider add --name relay --api-key sk-xxx
+# or via CLI: cx-connect provider add --name relay --api-key sk-xxx
 # [[agent.providers]]
 # name = "anthropic"
 # api_key = "sk-ant-xxx"
@@ -129,7 +129,7 @@ app_secret = "your-feishu-app-secret"
 # - "" (empty/not set): Auto-detect from user's first message
 language = "en"
 
-# Session data storage directory (default: ~/.cc-connect)
+# Session data storage directory (default: ~/.cx-connect)
 # data_dir = "/path/to/custom/dir"
 
 [log]

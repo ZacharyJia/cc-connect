@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 	"unicode/utf8"
 
-	"github.com/chenhg5/cc-connect/core"
+	"github.com/ZacharyJia/cx-connect/core"
 )
 
 // geminiSession manages multi-turn conversations with the Gemini CLI.
@@ -76,7 +76,7 @@ func (gs *geminiSession) Send(prompt string, images []core.ImageAttachment) erro
 			case "image/webp":
 				ext = ".webp"
 			}
-			fname := fmt.Sprintf("cc-connect-img-%d%s", i, ext)
+			fname := fmt.Sprintf("cx-connect-img-%d%s", i, ext)
 			fpath := fmt.Sprintf("%s/%s", tmpDir, fname)
 			if err := os.WriteFile(fpath, img.Data, 0o644); err != nil {
 				slog.Warn("geminiSession: failed to save image", "error", err)

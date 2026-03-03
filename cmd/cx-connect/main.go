@@ -12,22 +12,22 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/chenhg5/cc-connect/config"
-	"github.com/chenhg5/cc-connect/core"
+	"github.com/ZacharyJia/cx-connect/config"
+	"github.com/ZacharyJia/cx-connect/core"
 
-	_ "github.com/chenhg5/cc-connect/agent/claudecode"
-	_ "github.com/chenhg5/cc-connect/agent/codex"
-	_ "github.com/chenhg5/cc-connect/agent/cursor"
-	_ "github.com/chenhg5/cc-connect/agent/gemini"
+	_ "github.com/ZacharyJia/cx-connect/agent/claudecode"
+	_ "github.com/ZacharyJia/cx-connect/agent/codex"
+	_ "github.com/ZacharyJia/cx-connect/agent/cursor"
+	_ "github.com/ZacharyJia/cx-connect/agent/gemini"
 
-	_ "github.com/chenhg5/cc-connect/platform/dingtalk"
-	_ "github.com/chenhg5/cc-connect/platform/discord"
-	_ "github.com/chenhg5/cc-connect/platform/feishu"
-	_ "github.com/chenhg5/cc-connect/platform/line"
-	_ "github.com/chenhg5/cc-connect/platform/qq"
-	_ "github.com/chenhg5/cc-connect/platform/slack"
-	_ "github.com/chenhg5/cc-connect/platform/telegram"
-	_ "github.com/chenhg5/cc-connect/platform/wecom"
+	_ "github.com/ZacharyJia/cx-connect/platform/dingtalk"
+	_ "github.com/ZacharyJia/cx-connect/platform/discord"
+	_ "github.com/ZacharyJia/cx-connect/platform/feishu"
+	_ "github.com/ZacharyJia/cx-connect/platform/line"
+	_ "github.com/ZacharyJia/cx-connect/platform/qq"
+	_ "github.com/ZacharyJia/cx-connect/platform/slack"
+	_ "github.com/ZacharyJia/cx-connect/platform/telegram"
+	_ "github.com/ZacharyJia/cx-connect/platform/wecom"
 )
 
 var (
@@ -58,16 +58,16 @@ func main() {
 		}
 	}
 
-	configFlag := flag.String("config", "", "path to config file (default: ./config.toml or ~/.cc-connect/config.toml)")
+	configFlag := flag.String("config", "", "path to config file (default: ./config.toml or ~/.cx-connect/config.toml)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("cc-connect %s\ncommit:  %s\nbuilt:   %s\n", version, commit, buildTime)
+		fmt.Printf("cx-connect %s\ncommit:  %s\nbuilt:   %s\n", version, commit, buildTime)
 		return
 	}
 
-	core.VersionInfo = fmt.Sprintf("cc-connect %s\ncommit: %s\nbuilt: %s", version, commit, buildTime)
+	core.VersionInfo = fmt.Sprintf("cx-connect %s\ncommit: %s\nbuilt: %s", version, commit, buildTime)
 
 	configPath := resolveConfigPath(*configFlag)
 
@@ -77,7 +77,7 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("Created default config at %s\n", configPath)
-		fmt.Println("Please edit this file to add your agent and platform credentials, then run cc-connect again.")
+		fmt.Println("Please edit this file to add your agent and platform credentials, then run cx-connect again.")
 		os.Exit(0)
 	}
 
@@ -130,7 +130,7 @@ func main() {
 		apiSrv.Start()
 	}
 
-	slog.Info("cc-connect is running")
+	slog.Info("cx-connect is running")
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -150,8 +150,7 @@ func main() {
 }
 
 // sessionStorePath builds a unique filename from project name + work_dir.
-// It checks the local .cc-connect/ directory first for backward compatibility;
-// if the file exists there, it is used. Otherwise falls back to dataDir/sessions/.
+// It checks local .cx-connect/ first; if no local file exists, it falls back to dataDir/sessions/.
 func sessionStorePath(dataDir, name, workDir string) string {
 	var filename string
 	if workDir == "" {
@@ -166,14 +165,14 @@ func sessionStorePath(dataDir, name, workDir string) string {
 		filename = fmt.Sprintf("%s_%s.json", name, short)
 	}
 
-	// Check legacy local path: .cc-connect/<name>.json or .cc-connect/<name>.sessions.json
-	for _, legacy := range []string{
-		filepath.Join(".cc-connect", filename),
-		filepath.Join(".cc-connect", strings.TrimSuffix(filename, ".json")+".sessions.json"),
+	// Check local path: .cx-connect/<name>.json or .cx-connect/<name>.sessions.json
+	for _, candidate := range []string{
+		filepath.Join(".cx-connect", filename),
+		filepath.Join(".cx-connect", strings.TrimSuffix(filename, ".json")+".sessions.json"),
 	} {
-		if _, err := os.Stat(legacy); err == nil {
-			slog.Info("session: using local file", "path", legacy)
-			return legacy
+		if _, err := os.Stat(candidate); err == nil {
+			slog.Info("session: using local file", "path", candidate)
+			return candidate
 		}
 	}
 
@@ -181,7 +180,7 @@ func sessionStorePath(dataDir, name, workDir string) string {
 }
 
 // resolveConfigPath determines which config file to use.
-// Priority: explicit flag → ./config.toml → ~/.cc-connect/config.toml
+// Priority: explicit flag → ./config.toml → ~/.cx-connect/config.toml
 func resolveConfigPath(explicit string) string {
 	if explicit != "" {
 		return explicit
@@ -190,7 +189,7 @@ func resolveConfigPath(explicit string) string {
 		return "config.toml"
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".cc-connect", "config.toml")
+		return filepath.Join(home, ".cx-connect", "config.toml")
 	}
 	return "config.toml"
 }
@@ -200,8 +199,8 @@ func bootstrapConfig(path string) error {
 		return err
 	}
 
-	const tmpl = `# cc-connect configuration
-# Docs: https://github.com/chenhg5/cc-connect
+	const tmpl = `# cx-connect configuration
+# Docs: https://github.com/ZacharyJia/cx-connect
 
 [log]
 level = "info"
@@ -228,7 +227,7 @@ app_id = "your-feishu-app-id"
 app_secret = "your-feishu-app-secret"
 
 # For more platforms (DingTalk, Telegram, Slack, Discord, LINE, WeChat Work)
-# see: https://github.com/chenhg5/cc-connect/blob/main/config.example.toml
+# see: https://github.com/ZacharyJia/cx-connect/blob/main/config.example.toml
 `
 	return os.WriteFile(path, []byte(tmpl), 0o644)
 }

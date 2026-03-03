@@ -1,4 +1,4 @@
-# cc-connect
+# cx-connect
 
 [English](./README.md) | 中文
 
@@ -23,9 +23,9 @@
 ## 效果截图
 
 <p align="center">
-  <img src="docs/images/screenshot/cc-connect-lark.JPG" alt="飞书" width="32%" />
-  <img src="docs/images/screenshot/cc-connect-discord.png" alt="Discord" width="32%" />
-  <img src="docs/images/screenshot/cc-connect-wechat.JPG" alt="微信" width="32%" />
+  <img src="docs/images/screenshot/cx-connect-lark.JPG" alt="飞书" width="32%" />
+  <img src="docs/images/screenshot/cx-connect-discord.png" alt="Discord" width="32%" />
+  <img src="docs/images/screenshot/cx-connect-wechat.JPG" alt="微信" width="32%" />
 </p>
 <p align="center">
   <em>左：飞书 &nbsp;|&nbsp; 中：Discord &nbsp;|&nbsp; 右：个人微信（通过企业微信关联）</em>
@@ -61,7 +61,7 @@
 | Feature | 语音消息（语音转文字） | ✅ Beta — Whisper API (OpenAI / Groq) + ffmpeg |
 | Feature | 图片消息 | ✅ Beta — 多模态 (Claude Code) |
 | Feature | API Provider 管理 | ✅ Beta — 运行时切换 Provider |
-| Feature | CLI 发送 (`cc-connect send`) | ✅ Beta — 通过命令行发送消息到会话 |
+| Feature | CLI 发送 (`cx-connect send`) | ✅ Beta — 通过命令行发送消息到会话 |
 
 ## 快速开始
 
@@ -77,7 +77,7 @@
 把下面这段话发给 Claude Code 或其他 AI 编程助手，它会帮你完成整个安装和配置过程：
 
 ```
-请参考 https://raw.githubusercontent.com/chenhg5/cc-connect/refs/heads/main/INSTALL.md 帮我安装和配置 cc-connect
+请参考 https://raw.githubusercontent.com/ZacharyJia/cx-connect/refs/heads/main/INSTALL.md 帮我安装和配置 cx-connect
 ```
 
 ### 手动安装
@@ -85,29 +85,29 @@
 **通过 npm 安装：**
 
 ```bash
-npm install -g cc-connect
+npm install -g cx-connect
 ```
 
 安装beta版本：
 
 ```bash
-npm install -g cc-connect@beta
+npm install -g cx-connect@beta
 ```
 
-**从 [GitHub Releases](https://github.com/chenhg5/cc-connect/releases) 下载二进制：**
+**从 [GitHub Releases](https://github.com/ZacharyJia/cx-connect/releases) 下载二进制：**
 
 ```bash
 # Linux amd64 示例
-curl -L -o cc-connect https://github.com/chenhg5/cc-connect/releases/latest/download/cc-connect-linux-amd64
-chmod +x cc-connect
-sudo mv cc-connect /usr/local/bin/
+curl -L -o cx-connect https://github.com/ZacharyJia/cx-connect/releases/latest/download/cx-connect-linux-amd64
+chmod +x cx-connect
+sudo mv cx-connect /usr/local/bin/
 ```
 
 **从源码编译（需要 Go 1.22+）：**
 
 ```bash
-git clone https://github.com/chenhg5/cc-connect.git
-cd cc-connect
+git clone https://github.com/ZacharyJia/cx-connect.git
+cd cx-connect
 make build
 ```
 
@@ -115,9 +115,9 @@ make build
 
 ```bash
 # 全局配置（推荐）
-mkdir -p ~/.cc-connect
-cp config.example.toml ~/.cc-connect/config.toml
-vim ~/.cc-connect/config.toml
+mkdir -p ~/.cx-connect
+cp config.example.toml ~/.cx-connect/config.toml
+vim ~/.cx-connect/config.toml
 
 # 或本地配置（也支持）
 cp config.example.toml config.toml
@@ -126,21 +126,21 @@ cp config.example.toml config.toml
 ### 运行
 
 ```bash
-./cc-connect                              # 自动: ./config.toml → ~/.cc-connect/config.toml
-./cc-connect -config /path/to/config.toml # 指定路径
-./cc-connect --version                    # 显示版本信息
+./cx-connect                              # 自动: ./config.toml → ~/.cx-connect/config.toml
+./cx-connect -config /path/to/config.toml # 指定路径
+./cx-connect --version                    # 显示版本信息
 ```
 
 ### 升级
 
 ```bash
 # npm
-npm install -g cc-connect           # 稳定版
-npm install -g cc-connect@beta      # 内测版
+npm install -g cx-connect           # 稳定版
+npm install -g cx-connect@beta      # 内测版
 
 # 二进制自更新
-cc-connect update                   # 稳定版
-cc-connect update --pre             # 内测版（含 pre-release）
+cx-connect update                   # 稳定版
+cx-connect update --pre             # 内测版（含 pre-release）
 ```
 
 ## 平台接入指南
@@ -299,10 +299,10 @@ env = { CLAUDE_CODE_USE_BEDROCK = "1", AWS_PROFILE = "bedrock" }
 **通过 CLI 命令：**
 
 ```bash
-cc-connect provider add --project my-backend --name relay --api-key sk-xxx --base-url https://api.relay.com
-cc-connect provider add --project my-backend --name bedrock --env CLAUDE_CODE_USE_BEDROCK=1,AWS_PROFILE=bedrock
-cc-connect provider list --project my-backend
-cc-connect provider remove --project my-backend --name relay
+cx-connect provider add --project my-backend --name relay --api-key sk-xxx --base-url https://api.relay.com
+cx-connect provider add --project my-backend --name bedrock --env CLAUDE_CODE_USE_BEDROCK=1,AWS_PROFILE=bedrock
+cx-connect provider list --project my-backend
+cx-connect provider remove --project my-backend --name relay
 ```
 
 **从 [cc-switch](https://github.com/SaladDay/cc-switch-cli) 导入：**
@@ -310,9 +310,9 @@ cc-connect provider remove --project my-backend --name relay
 如果你已经使用 cc-switch 管理 Provider，一条命令即可导入（需要 `sqlite3`）：
 
 ```bash
-cc-connect provider import --project my-backend
-cc-connect provider import --project my-backend --type claude     # 仅 Claude Provider
-cc-connect provider import --db-path ~/.cc-switch/cc-switch.db    # 指定数据库路径
+cx-connect provider import --project my-backend
+cx-connect provider import --project my-backend --type claude     # 仅 Claude Provider
+cx-connect provider import --db-path ~/.cc-switch/cc-switch.db    # 指定数据库路径
 ```
 
 ### 在聊天中管理 Provider
@@ -341,7 +341,7 @@ Provider 配置中的 `env` 字段支持设置任意环境变量，可用于 Bed
 
 ## 语音消息（语音转文字） `Beta`
 
-直接发送语音消息 — cc-connect 自动将语音转为文字，再将文字转发给 Agent 处理。
+直接发送语音消息 — cx-connect 自动将语音转为文字，再将文字转发给 Agent 处理。
 
 **支持平台：** 飞书、企业微信、Telegram、LINE、Discord、Slack
 
@@ -371,7 +371,7 @@ api_key = "sk-xxx"     # OpenAI API Key
 ### 工作原理
 
 1. 用户在任何支持的平台发送语音消息
-2. cc-connect 从平台下载音频文件
+2. cx-connect 从平台下载音频文件
 3. 如需格式转换（AMR、OGG → MP3），由 `ffmpeg` 处理
 4. 音频发送至 Whisper API 进行转录
 5. 转录文字展示给用户，并转发给 Agent
@@ -412,7 +412,7 @@ apk add ffmpeg
 
 ## 配置说明
 
-每个 `[[projects]]` 将一个代码目录绑定到独立的 agent 和平台。单个 cc-connect 进程可以同时管理多个项目。
+每个 `[[projects]]` 将一个代码目录绑定到独立的 agent 和平台。单个 cx-connect 进程可以同时管理多个项目。
 
 ```toml
 # 项目 1
@@ -462,7 +462,7 @@ token = "xxxx"
 ```go
 package myplatform
 
-import "github.com/chenhg5/cc-connect/core"
+import "github.com/ZacharyJia/cx-connect/core"
 
 func init() {
     core.RegisterPlatform("myplatform", New)
@@ -475,10 +475,10 @@ func New(opts map[string]any) (core.Platform, error) {
 // 实现 Name(), Start(), Reply(), Send(), Stop() 方法
 ```
 
-然后在 `cmd/cc-connect/main.go` 中添加空导入：
+然后在 `cmd/cx-connect/main.go` 中添加空导入：
 
 ```go
-_ "github.com/chenhg5/cc-connect/platform/myplatform"
+_ "github.com/ZacharyJia/cx-connect/platform/myplatform"
 ```
 
 ### 添加新 Agent
@@ -488,8 +488,8 @@ _ "github.com/chenhg5/cc-connect/platform/myplatform"
 ## 项目结构
 
 ```
-cc-connect/
-├── cmd/cc-connect/          # 程序入口
+cx-connect/
+├── cmd/cx-connect/          # 程序入口
 │   └── main.go
 ├── core/                    # 核心抽象层
 │   ├── interfaces.go        # Platform + Agent 接口定义

@@ -51,7 +51,7 @@ func runSend(args []string) {
 
 	sockPath := resolveSocketPath(dataDir)
 	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
+		fmt.Fprintf(os.Stderr, "Error: cx-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
 
@@ -90,24 +90,24 @@ func resolveSocketPath(dataDir string) string {
 		return filepath.Join(dataDir, "run", "api.sock")
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".cc-connect", "run", "api.sock")
+		return filepath.Join(home, ".cx-connect", "run", "api.sock")
 	}
-	return filepath.Join(".cc-connect", "run", "api.sock")
+	return filepath.Join(".cx-connect", "run", "api.sock")
 }
 
 func printSendUsage() {
-	fmt.Println(`Usage: cc-connect send [options] <message>
+	fmt.Println(`Usage: cx-connect send [options] <message>
 
-Send a message to an active cc-connect session.
+Send a message to an active cx-connect session.
 
 Options:
   -p, --project <name>     Target project (optional if only one project)
   -s, --session <key>      Target session key (optional, picks first active)
-      --data-dir <path>    Data directory (default: ~/.cc-connect)
+      --data-dir <path>    Data directory (default: ~/.cx-connect)
   -h, --help               Show this help
 
 Examples:
-  cc-connect send "Daily summary: ..."
-  cc-connect send -p my-backend "Build completed successfully"
-  cc-connect send -p my-backend -s "feishu:oc_xxx:ou_yyy" "Scheduled report"`)
+  cx-connect send "Daily summary: ..."
+  cx-connect send -p my-backend "Build completed successfully"
+  cx-connect send -p my-backend -s "feishu:oc_xxx:ou_yyy" "Scheduled report"`)
 }

@@ -1,11 +1,11 @@
 # Discord Setup Guide
 
-This guide walks you through connecting **cc-connect** to Discord, so you can chat with your local Claude Code via a Discord bot.
+This guide walks you through connecting **cx-connect** to Discord, so you can chat with your local Claude Code via a Discord bot.
 
 ## Prerequisites
 
 - A Discord account
-- A machine that can run cc-connect (no public IP needed)
+- A machine that can run cx-connect (no public IP needed)
 - Claude Code installed and configured
 
 > 💡 **Advantage**: Uses Gateway (WebSocket) — no public IP, no domain, no reverse proxy needed.
@@ -21,7 +21,7 @@ Go to [Discord Developer Portal](https://discord.com/developers/applications) an
 ### 1.2 Create a New Application
 
 1. Click "New Application" in the top right
-2. Enter an application name (e.g. `cc-connect`)
+2. Enter an application name (e.g. `cx-connect`)
 3. Agree to the Terms of Service
 4. Click "Create"
 
@@ -42,7 +42,7 @@ In the left sidebar, click "Bot".
 
 | Field | Suggested Value |
 |-------|----------------|
-| Username | `cc-connect` |
+| Username | `cx-connect` |
 | Avatar | Upload an icon you like |
 
 ---
@@ -89,7 +89,7 @@ Click "Save Changes".
 
 ---
 
-## Step 5: Configure cc-connect
+## Step 5: Configure cx-connect
 
 Add the token to your `config.toml`:
 
@@ -111,7 +111,7 @@ type = "discord"
 token = "MTk4NjIyNDgzNDcOTY3NDUxMg.G8vKqh.xxx..."
 ```
 
-> cc-connect automatically configures the required Intents (MESSAGE_CONTENT, GUILD_MESSAGES, DIRECT_MESSAGES).
+> cx-connect automatically configures the required Intents (MESSAGE_CONTENT, GUILD_MESSAGES, DIRECT_MESSAGES).
 
 ---
 
@@ -160,14 +160,14 @@ Review the permissions and click "Authorize". Complete the CAPTCHA if prompted.
 
 ---
 
-## Step 8: Start cc-connect
+## Step 8: Start cx-connect
 
 ### 8.1 Launch
 
 ```bash
-cc-connect
+cx-connect
 # Or specify a config file
-cc-connect -config /path/to/config.toml
+cx-connect -config /path/to/config.toml
 ```
 
 ### 8.2 Verify Connection
@@ -175,9 +175,9 @@ cc-connect -config /path/to/config.toml
 You should see logs like:
 
 ```
-level=INFO msg="discord: connected" bot=cc-connect#0000
+level=INFO msg="discord: connected" bot=cx-connect#0000
 level=INFO msg="platform started" project=my-project platform=discord
-level=INFO msg="cc-connect is running" projects=1
+level=INFO msg="cx-connect is running" projects=1
 ```
 
 ---
@@ -200,9 +200,9 @@ Send a message in any channel where the bot has permissions.
 ```
 User: Help me analyze the current project structure
 
-cc-connect: 🤔 Thinking...
-cc-connect: 🔧 Tool: Bash(ls -la)
-cc-connect: Here's the project structure...
+cx-connect: 🤔 Thinking...
+cx-connect: 🔧 Tool: Bash(ls -la)
+cx-connect: Here's the project structure...
 ```
 
 ---
@@ -222,7 +222,7 @@ cc-connect: Here's the project structure...
 ┌─────────────────────────────────────────────────────────────┐
 │                    Your Local Machine                         │
 │                                                              │
-│   cc-connect ◄──► Claude Code CLI ◄──► Your Project Code    │
+│   cx-connect ◄──► Claude Code CLI ◄──► Your Project Code    │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -238,7 +238,7 @@ cc-connect: Here's the project structure...
 | **Heartbeat** | Automatic keepalive |
 | **Reconnection** | Automatic on disconnect |
 | **Intents** | Must declare required event types |
-| **Message limit** | 2000 characters per message (auto-split by cc-connect) |
+| **Message limit** | 2000 characters per message (auto-split by cx-connect) |
 | **Markdown** | Full native support |
 
 ---
@@ -254,7 +254,7 @@ Fix:
 2. Select your app → Bot
 3. Enable "Message Content Intent"
 4. Save changes
-5. Restart cc-connect
+5. Restart cx-connect
 
 ### Q: Bot connects then immediately disconnects?
 

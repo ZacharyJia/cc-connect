@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chenhg5/cc-connect/core"
+	"github.com/ZacharyJia/cx-connect/core"
 )
 
 // claudeSession manages a long-running Claude Code process using
@@ -67,7 +67,7 @@ func newClaudeSession(ctx context.Context, workDir, model, sessionID, mode strin
 	cmd := exec.CommandContext(sessionCtx, "claude", args...)
 	cmd.Dir = workDir
 	// Filter out CLAUDECODE env var to prevent "nested session" detection,
-	// since cc-connect is a bridge, not a nested Claude Code session.
+	// since cx-connect is a bridge, not a nested Claude Code session.
 	env := filterEnv(os.Environ(), "CLAUDECODE")
 	if len(extraEnv) > 0 {
 		env = append(env, extraEnv...)
@@ -309,7 +309,7 @@ func (cs *claudeSession) Send(prompt string, images []core.ImageAttachment) erro
 	}
 
 	// Save images to local files and build multimodal content
-	imgDir := filepath.Join(cs.workDir, ".cc-connect", "images")
+	imgDir := filepath.Join(cs.workDir, ".cx-connect", "images")
 	os.MkdirAll(imgDir, 0o755)
 
 	var parts []map[string]any

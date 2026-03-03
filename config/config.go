@@ -12,7 +12,7 @@ import (
 var ConfigPath string
 
 type Config struct {
-	DataDir    string           `toml:"data_dir"` // session store directory, default ~/.cc-connect
+	DataDir    string           `toml:"data_dir"` // session store directory, default ~/.cx-connect
 	Agent      AgentConfig     `toml:"agent"`    // global agent config
 	Platforms  []PlatformConfig `toml:"platforms"` // platform configs
 	AllowUsers []AllowUser     `toml:"allow_users"`
@@ -81,9 +81,9 @@ func Load(path string) (*Config, error) {
 
 	if cfg.DataDir == "" {
 		if home, err := os.UserHomeDir(); err == nil {
-			cfg.DataDir = filepath.Join(home, ".cc-connect")
+			cfg.DataDir = filepath.Join(home, ".cx-connect")
 		} else {
-			cfg.DataDir = ".cc-connect"
+			cfg.DataDir = ".cx-connect"
 		}
 	}
 

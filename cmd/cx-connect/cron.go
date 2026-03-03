@@ -78,7 +78,7 @@ func runCronAdd(args []string) {
 		}
 	}
 
-	// Fallback to env vars (set by cc-connect when spawning agent)
+	// Fallback to env vars (set by cx-connect when spawning agent)
 	if project == "" {
 		project = os.Getenv("CC_PROJECT")
 	}
@@ -104,7 +104,7 @@ func runCronAdd(args []string) {
 
 	sockPath := resolveSocketPath(dataDir)
 	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
+		fmt.Fprintf(os.Stderr, "Error: cx-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
 
@@ -159,7 +159,7 @@ func runCronList(args []string) {
 
 	sockPath := resolveSocketPath(dataDir)
 	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
+		fmt.Fprintf(os.Stderr, "Error: cx-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
 
@@ -241,7 +241,7 @@ func runCronDel(args []string) {
 
 	sockPath := resolveSocketPath(dataDir)
 	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
+		fmt.Fprintf(os.Stderr, "Error: cx-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
 
@@ -274,18 +274,18 @@ func apiPost(sockPath, path string, payload []byte) (*http.Response, error) {
 }
 
 func printCronUsage() {
-	fmt.Println(`Usage: cc-connect cron <command> [options]
+	fmt.Println(`Usage: cx-connect cron <command> [options]
 
 Commands:
   add       Create a new scheduled task
   list      List all scheduled tasks
   del <id>  Delete a scheduled task
 
-Run 'cc-connect cron <command> --help' for details.`)
+Run 'cx-connect cron <command> --help' for details.`)
 }
 
 func printCronAddUsage() {
-	fmt.Println(`Usage: cc-connect cron add [options] [<min> <hour> <day> <month> <weekday> <prompt>]
+	fmt.Println(`Usage: cx-connect cron add [options] [<min> <hour> <day> <month> <weekday> <prompt>]
 
 Create a new scheduled task.
 
@@ -295,10 +295,10 @@ Options:
   -c, --cron <expr>          Cron expression, e.g. "0 6 * * *"
       --prompt <text>        Task prompt
       --desc <text>          Short description
-      --data-dir <path>      Data directory (default: ~/.cc-connect)
+      --data-dir <path>      Data directory (default: ~/.cx-connect)
   -h, --help                 Show this help
 
 Examples:
-  cc-connect cron add --cron "0 6 * * *" --prompt "Collect GitHub trending data" --desc "Daily Trending"
-  cc-connect cron add 0 6 * * * Collect GitHub trending data and send me a summary`)
+  cx-connect cron add --cron "0 6 * * *" --prompt "Collect GitHub trending data" --desc "Daily Trending"
+  cx-connect cron add 0 6 * * * Collect GitHub trending data and send me a summary`)
 }

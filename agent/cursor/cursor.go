@@ -111,6 +111,10 @@ func (a *Agent) ListSessions(_ context.Context) ([]core.AgentSessionInfo, error)
 
 func (a *Agent) Stop() error { return nil }
 
+// ── ContextCompressor implementation ──────────────────────────
+
+func (a *Agent) CompressCommand() string { return "" }
+
 // ── ModeSwitcher ────────────────────────────────────────────────
 
 func (a *Agent) SetMode(mode string) {

@@ -993,6 +993,8 @@ func (e *Engine) handleCommand(p Platform, msg *Message, raw string) {
 		e.cmdMemory(p, msg, args)
 	case "/cron":
 		e.cmdCron(p, msg, args)
+	case "/compress", "/compact":
+		e.cmdCompress(p, msg)
 	case "/stop":
 		e.cmdStop(p, msg)
 	case "/help":
@@ -1430,6 +1432,35 @@ func (e *Engine) cmdStop(p Platform, msg *Message) {
 
 	e.cleanupInteractiveState(msg.SessionKey)
 	e.reply(p, msg.ReplyCtx, e.i18n.T(MsgExecutionStopped))
+}
+
+func (e *Engine) cmdCompress(p Platform, msg *Message) {
+	compressor, ok := e.agent.(ContextCompressor)
+	if !ok || compressor.CompressCommand() == "" {
+		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgCompressNotSupported))
+		return
+	}
+
+	// Check for an active interactive session
+	e.interactiveMu.Lock()
+	state, hasState := e.interactiveStates[msg.SessionKey]
+	e.interactiveMu.Unlock()
+
+	if !hasState || state == nil || state.agentSession == nil || !state.agentSession.Alive() {
+		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgCompressNoSession))
+		return
+	}
+
+	session := e.sessions.GetOrCreateActive(msg.SessionKey)
+	if !session.TryLock() {
+		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgPreviousProcessing))
+		return
+	}
+
+	e.send(p, msg.ReplyCtx, e.i18n.T(MsgCompressing))
+
+	msg.Content = compressor.CompressCommand()
+	go e.processInteractiveMessage(p, msg, session)
 }
 
 func (e *Engine) cmdAllow(p Platform, msg *Message, args []string) {

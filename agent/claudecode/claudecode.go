@@ -268,6 +268,10 @@ func (a *Agent) GetAllowedTools() []string {
 	return result
 }
 
+// ── ContextCompressor implementation ──────────────────────────
+
+func (a *Agent) CompressCommand() string { return "/compact" }
+
 // ── MemoryFileProvider implementation ─────────────────────────
 
 func (a *Agent) ProjectMemoryFile() string {

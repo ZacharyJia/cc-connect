@@ -116,6 +116,10 @@ func (a *Agent) GetMode() string {
 	return a.mode
 }
 
+// ── ContextCompressor implementation ──────────────────────────
+
+func (a *Agent) CompressCommand() string { return "/compact" }
+
 // ── MemoryFileProvider implementation ─────────────────────────
 
 func (a *Agent) ProjectMemoryFile() string {

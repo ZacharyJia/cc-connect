@@ -135,6 +135,10 @@ func (a *Agent) PermissionModes() []core.PermissionModeInfo {
 	}
 }
 
+// ── ContextCompressor implementation ──────────────────────────
+
+func (a *Agent) CompressCommand() string { return "/compress" }
+
 // ── MemoryFileProvider implementation ─────────────────────────
 
 func (a *Agent) ProjectMemoryFile() string {

@@ -159,6 +159,10 @@ const (
 
 	MsgUserNotAllowed MsgKey = "user_not_allowed"
 
+	MsgCompressNotSupported MsgKey = "compress_not_supported"
+	MsgCompressing          MsgKey = "compressing"
+	MsgCompressNoSession    MsgKey = "compress_no_session"
+
 	MsgMemoryNotSupported MsgKey = "memory_not_supported"
 	MsgMemoryShowProject  MsgKey = "memory_show_project"
 	MsgMemoryShowGlobal   MsgKey = "memory_show_global"
@@ -311,6 +315,7 @@ var messages = map[MsgKey]map[Language]string{
 			"/output [concise|verbose|quiet]\n  View/switch output verbosity\n\n" +
 			"/lang [en|zh|auto]\n  View/switch language\n\n" +
 			"/quiet\n  Toggle thinking/tool progress\n\n" +
+			"/compress\n  Compress conversation context\n\n" +
 			"/stop\n  Stop current execution\n\n" +
 			"/cron [add|list|del|enable|disable]\n  Manage scheduled tasks\n\n" +
 			"/version\n  Show cx-connect version\n\n" +
@@ -329,6 +334,7 @@ var messages = map[MsgKey]map[Language]string{
 			"/output [concise|verbose|quiet]\n  查看/切换输出模式\n\n" +
 			"/lang [en|zh|auto]\n  查看/切换语言\n\n" +
 			"/quiet\n  开关思考和工具进度消息\n\n" +
+			"/compress\n  压缩会话上下文\n\n" +
 			"/stop\n  停止当前执行\n\n" +
 			"/cron [add|list|del|enable|disable]\n  管理定时任务\n\n" +
 			"/version\n  查看 cx-connect 版本\n\n" +
@@ -529,6 +535,18 @@ var messages = map[MsgKey]map[Language]string{
 			"`/memory add <文本>` — 追加到项目记忆\n" +
 			"`/memory global` — 查看全局记忆\n" +
 			"`/memory global add <文本>` — 追加到全局记忆",
+	},
+	MsgCompressNotSupported: {
+		LangEnglish: "This agent does not support context compression.",
+		LangChinese: "当前 Agent 不支持上下文压缩。可以使用 `/new` 开始新会话。",
+	},
+	MsgCompressing: {
+		LangEnglish: "🗜 Compressing context...",
+		LangChinese: "🗜 正在压缩上下文...",
+	},
+	MsgCompressNoSession: {
+		LangEnglish: "No active session to compress. Send a message first.",
+		LangChinese: "没有活跃的会话可以压缩。请先发送一条消息。",
 	},
 }
 

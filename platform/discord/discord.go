@@ -20,8 +20,9 @@ func init() {
 const maxDiscordLen = 2000
 
 type replyContext struct {
-	channelID string
-	messageID string
+	channelID   string
+	messageID   string
+	interaction *discordgo.Interaction
 }
 
 type Platform struct {
@@ -29,6 +30,7 @@ type Platform struct {
 	session *discordgo.Session
 	handler core.MessageHandler
 	botID   string
+	appID   string
 }
 
 func New(opts map[string]any) (core.Platform, error) {
@@ -54,7 +56,22 @@ func (p *Platform) Start(handler core.MessageHandler) error {
 
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		p.botID = r.User.ID
+		if app, err := s.Application("@me"); err == nil && app != nil && app.ID != "" {
+			p.appID = app.ID
+		} else {
+			// Bot user ID usually equals app ID; keep this fallback for registration.
+			p.appID = r.User.ID
+			if err != nil {
+				slog.Warn("discord: failed to fetch application id", "error", err)
+			}
+		}
 		slog.Info("discord: connected", "bot", r.User.Username+"#"+r.User.Discriminator)
+
+		guildIDs := make([]string, 0, len(r.Guilds))
+		for _, g := range r.Guilds {
+			guildIDs = append(guildIDs, g.ID)
+		}
+		p.registerGuildCommands(guildIDs)
 	})
 
 	session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -108,6 +125,42 @@ func (p *Platform) Start(handler core.MessageHandler) error {
 		p.handler(p, msg)
 	})
 
+	session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		if i.Type != discordgo.InteractionApplicationCommand {
+			return
+		}
+		data := i.ApplicationCommandData()
+		if data.Name == "" {
+			return
+		}
+
+		if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		}); err != nil {
+			slog.Error("discord: failed to acknowledge interaction", "command", data.Name, "error", err)
+			return
+		}
+
+		userID, userName := interactionUser(i)
+		content := "/" + data.Name
+		if args := parseInteractionArgs(data.Options); args != "" {
+			content += " " + args
+		}
+
+		msg := &core.Message{
+			SessionKey: fmt.Sprintf("discord:%s:%s", i.ChannelID, userID),
+			Platform:   "discord",
+			UserID:     userID,
+			UserName:   userName,
+			Content:    content,
+			ReplyCtx: replyContext{
+				channelID:   i.ChannelID,
+				interaction: i.Interaction,
+			},
+		}
+		p.handler(p, msg)
+	})
+
 	if err := session.Open(); err != nil {
 		return fmt.Errorf("discord: open gateway: %w", err)
 	}
@@ -136,8 +189,17 @@ func (p *Platform) Reply(ctx context.Context, rctx any, content string) error {
 			content = ""
 		}
 
-		ref := &discordgo.MessageReference{MessageID: rc.messageID}
-		_, err := p.session.ChannelMessageSendReply(rc.channelID, chunk, ref)
+		var err error
+		if rc.interaction != nil {
+			_, err = p.session.FollowupMessageCreate(rc.interaction, false, &discordgo.WebhookParams{
+				Content: chunk,
+			})
+		} else if rc.messageID != "" {
+			ref := &discordgo.MessageReference{MessageID: rc.messageID}
+			_, err = p.session.ChannelMessageSendReply(rc.channelID, chunk, ref)
+		} else {
+			_, err = p.session.ChannelMessageSend(rc.channelID, chunk)
+		}
 		if err != nil {
 			return fmt.Errorf("discord: send: %w", err)
 		}
@@ -171,7 +233,14 @@ func (p *Platform) Send(ctx context.Context, rctx any, content string) error {
 			content = ""
 		}
 
-		_, err := p.session.ChannelMessageSend(rc.channelID, chunk)
+		var err error
+		if rc.interaction != nil {
+			_, err = p.session.FollowupMessageCreate(rc.interaction, false, &discordgo.WebhookParams{
+				Content: chunk,
+			})
+		} else {
+			_, err = p.session.ChannelMessageSend(rc.channelID, chunk)
+		}
 		if err != nil {
 			return fmt.Errorf("discord: send: %w", err)
 		}
@@ -211,4 +280,150 @@ func lastIndexBefore(s string, b byte, before int) int {
 		}
 	}
 	return -1
+}
+
+func (p *Platform) registerGuildCommands(guildIDs []string) {
+	if p.appID == "" {
+		slog.Warn("discord: skip slash command registration, app id is empty")
+		return
+	}
+	if len(guildIDs) == 0 {
+		slog.Info("discord: no guilds found, skip slash command registration")
+		return
+	}
+
+	commands := discordSlashCommands()
+	registeredGuilds := 0
+	for _, guildID := range guildIDs {
+		if err := p.syncGuildCommands(guildID, commands); err != nil {
+			slog.Warn("discord: failed to sync guild slash commands", "guild_id", guildID, "error", err)
+			continue
+		}
+		registeredGuilds++
+	}
+
+	slog.Info("discord: slash commands registered",
+		"guilds", registeredGuilds,
+		"commands_per_guild", len(commands))
+}
+
+func (p *Platform) syncGuildCommands(guildID string, desired []*discordgo.ApplicationCommand) error {
+	existing, err := p.session.ApplicationCommands(p.appID, guildID)
+	if err != nil {
+		return fmt.Errorf("list existing commands: %w", err)
+	}
+
+	existingByName := make(map[string]*discordgo.ApplicationCommand, len(existing))
+	for _, cmd := range existing {
+		existingByName[cmd.Name] = cmd
+	}
+
+	desiredByName := make(map[string]struct{}, len(desired))
+	var firstErr error
+
+	for _, cmd := range desired {
+		desiredByName[cmd.Name] = struct{}{}
+		if old, ok := existingByName[cmd.Name]; ok {
+			_, err = p.session.ApplicationCommandEdit(p.appID, guildID, old.ID, cmd)
+		} else {
+			_, err = p.session.ApplicationCommandCreate(p.appID, guildID, cmd)
+		}
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			slog.Warn("discord: failed to upsert slash command",
+				"guild_id", guildID,
+				"name", cmd.Name,
+				"error", err)
+		}
+	}
+
+	for _, cmd := range existing {
+		if _, keep := desiredByName[cmd.Name]; keep {
+			continue
+		}
+		if err := p.session.ApplicationCommandDelete(p.appID, guildID, cmd.ID); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			slog.Warn("discord: failed to delete stale slash command",
+				"guild_id", guildID,
+				"name", cmd.Name,
+				"error", err)
+		}
+	}
+
+	return firstErr
+}
+
+func discordSlashCommands() []*discordgo.ApplicationCommand {
+	withArgs := func(name, desc string) *discordgo.ApplicationCommand {
+		return &discordgo.ApplicationCommand{
+			Name:        name,
+			Description: desc,
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "args",
+					Description: "Optional command arguments",
+					Required:    false,
+				},
+			},
+		}
+	}
+
+	return []*discordgo.ApplicationCommand{
+		withArgs("new", "Start a new session"),
+		withArgs("list", "List sessions"),
+		withArgs("switch", "Switch session"),
+		withArgs("current", "Show current session"),
+		withArgs("history", "Show recent messages"),
+		withArgs("provider", "Manage providers"),
+		withArgs("allow", "Pre-allow a tool"),
+		withArgs("mode", "View or switch mode"),
+		withArgs("output", "View or switch output mode"),
+		withArgs("lang", "View or switch language"),
+		withArgs("quiet", "Toggle progress messages"),
+		withArgs("stop", "Stop current execution"),
+		withArgs("cron", "Manage scheduled tasks"),
+		withArgs("version", "Show cx-connect version"),
+		withArgs("help", "Show help"),
+	}
+}
+
+func parseInteractionArgs(options []*discordgo.ApplicationCommandInteractionDataOption) string {
+	for _, opt := range options {
+		if opt.Name != "args" {
+			continue
+		}
+		if v, ok := opt.Value.(string); ok {
+			return strings.TrimSpace(v)
+		}
+		if opt.Value != nil {
+			return strings.TrimSpace(fmt.Sprint(opt.Value))
+		}
+	}
+	return ""
+}
+
+func interactionUser(i *discordgo.InteractionCreate) (string, string) {
+	if i.Member != nil && i.Member.User != nil {
+		u := i.Member.User
+		return u.ID, discordUserName(u)
+	}
+	if i.User != nil {
+		return i.User.ID, discordUserName(i.User)
+	}
+	return "unknown", "unknown"
+}
+
+func discordUserName(u *discordgo.User) string {
+	if u == nil {
+		return "unknown"
+	}
+	if u.Username != "" {
+		return u.Username
+	}
+	return u.ID
 }

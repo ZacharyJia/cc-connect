@@ -468,7 +468,8 @@ func isKnownSlashCommand(content string) bool {
 	cmd := strings.ToLower(parts[0])
 	switch cmd {
 	case "/new", "/list", "/sessions", "/switch", "/current", "/history",
-		"/allow", "/mode", "/lang", "/output", "/quiet", "/provider", "/cron", "/stop",
+		"/allow", "/mode", "/lang", "/output", "/quiet", "/provider", "/memory",
+		"/compress", "/compact", "/cron", "/stop",
 		"/help", "/version":
 		return true
 	default:

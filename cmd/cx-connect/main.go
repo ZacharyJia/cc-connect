@@ -5,15 +5,18 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/ZacharyJia/cx-connect/config"
 	"github.com/ZacharyJia/cx-connect/core"
+	"github.com/ZacharyJia/cx-connect/daemon"
 
 	_ "github.com/ZacharyJia/cx-connect/agent/claudecode"
 	_ "github.com/ZacharyJia/cx-connect/agent/codex"
@@ -55,7 +58,32 @@ func main() {
 		case "cron":
 			runCron(os.Args[2:])
 			return
+		case "daemon":
+			runDaemon(os.Args[2:])
+			return
 		}
+	}
+
+	// When started as a daemon (CC_LOG_FILE set), redirect logs to a rotating file.
+	var logWriter io.Writer
+	var logCloser io.Closer
+	if logFile := os.Getenv("CC_LOG_FILE"); logFile != "" {
+		maxSize := int64(daemon.DefaultLogMaxSize)
+		if v := os.Getenv("CC_LOG_MAX_SIZE"); v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+				maxSize = n
+			}
+		}
+		w, err := daemon.NewRotatingWriter(logFile, maxSize)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to open log file %s: %v\n", logFile, err)
+			os.Exit(1)
+		}
+		logWriter = w
+		logCloser = w
+	}
+	if logCloser != nil {
+		defer logCloser.Close()
 	}
 
 	configFlag := flag.String("config", "", "path to config file (default: ./config.toml or ~/.cx-connect/config.toml)")
@@ -90,7 +118,7 @@ func main() {
 	config.ConfigPath = configPath
 	slog.Info("config loaded", "path", configPath)
 
-	setupLogger(cfg.Log.Level)
+	setupLogger(cfg.Log.Level, logWriter)
 
 	// Create engine from config (single agent + platforms)
 	engine := createEngine(cfg)
@@ -348,7 +376,10 @@ func createEngine(cfg *config.Config) *core.Engine {
 	return engine
 }
 
-func setupLogger(level string) {
+func setupLogger(level string, out io.Writer) {
+	if out == nil {
+		out = os.Stdout
+	}
 	var logLevel slog.Level
 	switch level {
 	case "debug":
@@ -360,7 +391,7 @@ func setupLogger(level string) {
 	default:
 		logLevel = slog.LevelInfo
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	slog.SetDefault(slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{
 		Level: logLevel,
 	})))
 }

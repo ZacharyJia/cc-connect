@@ -66,10 +66,37 @@ type interactiveState struct {
 	agentSession AgentSession
 	platform     Platform
 	replyCtx     any
+	session      *Session
 	mu           sync.Mutex
 	pending      *pendingPermission
 	approveAll   bool // when true, auto-approve all permission requests for this session
 	progressMode progressOutputMode
+	stopCh       chan struct{}
+	stopOnce     sync.Once
+}
+
+func newInteractiveState(p Platform, replyCtx any, progressMode progressOutputMode) *interactiveState {
+	return &interactiveState{
+		platform:     p,
+		replyCtx:     replyCtx,
+		progressMode: progressMode,
+		stopCh:       make(chan struct{}),
+	}
+}
+
+func (s *interactiveState) requestStop() {
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
+}
+
+func (s *interactiveState) stopRequested() bool {
+	select {
+	case <-s.stopCh:
+		return true
+	default:
+		return false
+	}
 }
 
 // pendingPermission represents a permission request waiting for user response.
@@ -220,13 +247,16 @@ func (e *Engine) Stop() error {
 	e.cancel()
 
 	e.interactiveMu.Lock()
+	states := make([]*interactiveState, 0, len(e.interactiveStates))
 	for key, state := range e.interactiveStates {
-		if state.agentSession != nil {
-			state.agentSession.Close()
-		}
 		delete(e.interactiveStates, key)
+		states = append(states, state)
 	}
 	e.interactiveMu.Unlock()
+
+	for _, state := range states {
+		e.closeInteractiveState(state, false)
+	}
 
 	var errs []error
 	for _, p := range e.platforms {
@@ -531,6 +561,7 @@ func (e *Engine) getOrCreateInteractiveState(sessionKey string, p Platform, repl
 
 	state, ok := e.interactiveStates[sessionKey]
 	if ok && state.agentSession != nil && state.agentSession.Alive() {
+		state.session = session
 		return state
 	}
 	progressMode := progressOutputConcise
@@ -556,17 +587,15 @@ func (e *Engine) getOrCreateInteractiveState(sessionKey string, p Platform, repl
 	agentSession, err := e.agent.StartSession(e.ctx, session.AgentSessionID)
 	if err != nil {
 		slog.Error("failed to start interactive session", "error", err)
-		state = &interactiveState{platform: p, replyCtx: replyCtx, progressMode: progressMode}
+		state = newInteractiveState(p, replyCtx, progressMode)
+		state.session = session
 		e.interactiveStates[sessionKey] = state
 		return state
 	}
 
-	state = &interactiveState{
-		agentSession: agentSession,
-		platform:     p,
-		replyCtx:     replyCtx,
-		progressMode: progressMode,
-	}
+	state = newInteractiveState(p, replyCtx, progressMode)
+	state.agentSession = agentSession
+	state.session = session
 	e.interactiveStates[sessionKey] = state
 
 	slog.Info("interactive session started", "session_key", sessionKey, "agent_session", session.AgentSessionID)
@@ -575,13 +604,55 @@ func (e *Engine) getOrCreateInteractiveState(sessionKey string, p Platform, repl
 
 func (e *Engine) cleanupInteractiveState(sessionKey string) {
 	e.interactiveMu.Lock()
-	defer e.interactiveMu.Unlock()
-
 	state, ok := e.interactiveStates[sessionKey]
-	if ok && state.agentSession != nil {
-		state.agentSession.Close()
+	if ok {
+		delete(e.interactiveStates, sessionKey)
 	}
-	delete(e.interactiveStates, sessionKey)
+	e.interactiveMu.Unlock()
+	if ok {
+		e.closeInteractiveState(state, true)
+	}
+}
+
+func (e *Engine) closeInteractiveState(state *interactiveState, async bool) {
+	if state == nil {
+		return
+	}
+
+	state.requestStop()
+
+	state.mu.Lock()
+	pending := state.pending
+	state.pending = nil
+	session := state.session
+	agentSession := state.agentSession
+	state.mu.Unlock()
+
+	if pending != nil {
+		close(pending.Resolved)
+	}
+
+	if session != nil && agentSession != nil {
+		if currentID := agentSession.CurrentSessionID(); currentID != "" {
+			session.AgentSessionID = currentID
+			e.sessions.Save()
+		}
+	}
+
+	if agentSession == nil {
+		return
+	}
+
+	closeFn := func() {
+		if err := agentSession.Close(); err != nil {
+			slog.Warn("failed to close interactive session", "error", err)
+		}
+	}
+	if async {
+		go closeFn()
+		return
+	}
+	closeFn()
 }
 
 func (e *Engine) processInteractiveEvents(state *interactiveState, session *Session, sessionKey string) {
@@ -595,9 +666,24 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 	var codexPendingLast string
 	codexVerboseStreamed := false
 
-	for event := range state.agentSession.Events() {
+	events := state.agentSession.Events()
+	for {
 		if e.ctx.Err() != nil {
 			return
+		}
+		if state.stopRequested() {
+			return
+		}
+
+		var event Event
+		var ok bool
+		select {
+		case <-state.stopCh:
+			return
+		case event, ok = <-events:
+			if !ok {
+				goto processExited
+			}
 		}
 
 		state.mu.Lock()
@@ -700,7 +786,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			state.pending = pending
 			state.mu.Unlock()
 
-			<-pending.Resolved
+			select {
+			case <-pending.Resolved:
+			case <-state.stopCh:
+				return
+			}
 			slog.Info("permission resolved", "request_id", event.RequestID)
 
 		case EventResult:
@@ -814,6 +904,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			}
 			return
 		}
+	}
+
+processExited:
+	if state.stopRequested() {
+		return
 	}
 
 	// Channel closed - process exited unexpectedly
@@ -1230,11 +1325,7 @@ func (e *Engine) cmdOutput(p Platform, msg *Message, args []string) {
 	e.interactiveMu.Unlock()
 
 	if !ok || state == nil {
-		state = &interactiveState{
-			platform:     p,
-			replyCtx:     msg.ReplyCtx,
-			progressMode: progressOutputConcise,
-		}
+		state = newInteractiveState(p, msg.ReplyCtx, progressOutputConcise)
 		e.interactiveMu.Lock()
 		e.interactiveStates[msg.SessionKey] = state
 		e.interactiveMu.Unlock()
@@ -1385,7 +1476,7 @@ func (e *Engine) cmdQuiet(p Platform, msg *Message) {
 
 	if !ok || state == nil {
 		// No state yet, create one so the flag persists
-		state = &interactiveState{platform: p, replyCtx: msg.ReplyCtx, progressMode: progressOutputQuiet}
+		state = newInteractiveState(p, msg.ReplyCtx, progressOutputQuiet)
 		e.interactiveMu.Lock()
 		e.interactiveStates[msg.SessionKey] = state
 		e.interactiveMu.Unlock()
@@ -1413,6 +1504,9 @@ func (e *Engine) cmdQuiet(p Platform, msg *Message) {
 func (e *Engine) cmdStop(p Platform, msg *Message) {
 	e.interactiveMu.Lock()
 	state, ok := e.interactiveStates[msg.SessionKey]
+	if ok {
+		delete(e.interactiveStates, msg.SessionKey)
+	}
 	e.interactiveMu.Unlock()
 
 	if !ok || state == nil {
@@ -1420,18 +1514,7 @@ func (e *Engine) cmdStop(p Platform, msg *Message) {
 		return
 	}
 
-	// Cancel pending permission if any
-	state.mu.Lock()
-	pending := state.pending
-	if pending != nil {
-		state.pending = nil
-	}
-	state.mu.Unlock()
-	if pending != nil {
-		close(pending.Resolved)
-	}
-
-	e.cleanupInteractiveState(msg.SessionKey)
+	e.closeInteractiveState(state, true)
 	e.reply(p, msg.ReplyCtx, e.i18n.T(MsgExecutionStopped))
 }
 

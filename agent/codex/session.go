@@ -55,8 +55,10 @@ func newCodexSession(ctx context.Context, workDir, model, mode, resumeID string,
 }
 
 // Send launches a codex subprocess.
-// If a threadID exists (from a prior turn or resume), uses `codex exec resume <id> <prompt>`.
-// Otherwise uses `codex exec <prompt>` to start a new conversation.
+// Prompts are always passed via stdin (`-`) so multiline Telegram messages
+// are preserved exactly instead of relying on CLI positional argument parsing.
+// If a threadID exists (from a prior turn or resume), uses
+// `codex exec resume <id> -`; otherwise uses `codex exec --cd <dir> -`.
 func (cs *codexSession) Send(prompt string, images []core.ImageAttachment) error {
 	if len(images) > 0 {
 		slog.Warn("codexSession: images not supported by Codex, ignoring")
@@ -87,15 +89,16 @@ func (cs *codexSession) Send(prompt string, images []core.ImageAttachment) error
 	}
 
 	if isResume {
-		args = append(args, tid, prompt)
+		args = append(args, tid, "-")
 	} else {
-		args = append(args, "--cd", cs.workDir, prompt)
+		args = append(args, "--cd", cs.workDir, "-")
 	}
 
 	slog.Debug("codexSession: launching", "resume", isResume, "args", args)
 
 	cmd := exec.CommandContext(cs.ctx, "codex", args...)
 	cmd.Dir = cs.workDir
+	cmd.Stdin = strings.NewReader(prompt)
 	if len(cs.extraEnv) > 0 {
 		cmd.Env = append(os.Environ(), cs.extraEnv...)
 	}

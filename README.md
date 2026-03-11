@@ -450,6 +450,36 @@ token = "xxxx"
 
 See [config.example.toml](config.example.toml) for a fully commented configuration template.
 
+### Forgejo Watchers
+
+Use `forgejo_watchers` to poll a Forgejo instance, persist tracked issues / PRs, and inject updates into cx-connect sessions one at a time.
+
+```toml
+[[forgejo_watchers]]
+name = "ops"
+base_url = "https://forgejo.example.com"
+token_env = "FORGEJO_TOKEN"
+username = "zachary"
+session_key = "telegram:123456:123456"
+poll_interval = "1m"
+work_dir = "default"
+state = "open"
+```
+
+Commands:
+
+```bash
+cx-connect forgejo-watch list
+cx-connect forgejo-watch run --name ops
+cx-connect forgejo-watch run --name ops --once
+```
+
+Behavior notes:
+
+- New issues and PRs create sessions under the configured `session_key`.
+- The watcher never injects more than one prompt at a time.
+- If any session in the cx-connect instance is busy, pending Forgejo updates wait for the next poll.
+
 ## Extending
 
 ### Adding a New Platform

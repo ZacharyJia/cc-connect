@@ -12,14 +12,15 @@ import (
 var ConfigPath string
 
 type Config struct {
-	DataDir    string           `toml:"data_dir"`  // session store directory, default ~/.cx-connect
-	Agent      AgentConfig      `toml:"agent"`     // global agent config
-	Platforms  []PlatformConfig `toml:"platforms"` // platform configs
-	AllowUsers []AllowUser      `toml:"allow_users"`
-	Log        LogConfig        `toml:"log"`
-	Language   string           `toml:"language"` // "en" or "zh", default is "en"
-	Speech     SpeechConfig     `toml:"speech"`
-	Web        WebConfig        `toml:"web"`
+	DataDir         string                 `toml:"data_dir"` // session store directory, default ~/.cx-connect
+	Agent           AgentConfig            `toml:"agent"`    // global agent config
+	Platforms       []PlatformConfig       `toml:"platforms"`
+	AllowUsers      []AllowUser            `toml:"allow_users"`
+	Log             LogConfig              `toml:"log"`
+	Language        string                 `toml:"language"` // "en" or "zh", default is "en"
+	Speech          SpeechConfig           `toml:"speech"`
+	Web             WebConfig              `toml:"web"`
+	ForgejoWatchers []ForgejoWatcherConfig `toml:"forgejo_watchers"`
 }
 
 type WebConfig struct {
@@ -72,6 +73,18 @@ type LogConfig struct {
 	Level string `toml:"level"`
 }
 
+type ForgejoWatcherConfig struct {
+	Name         string `toml:"name"`
+	BaseURL      string `toml:"base_url"`
+	Token        string `toml:"token"`
+	TokenEnv     string `toml:"token_env"`
+	Username     string `toml:"username"`
+	SessionKey   string `toml:"session_key"`
+	PollInterval string `toml:"poll_interval"`
+	WorkDir      string `toml:"work_dir"`
+	State        string `toml:"state"`
+}
+
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -109,6 +122,23 @@ func (c *Config) validate() error {
 	for j, p := range c.Platforms {
 		if p.Type == "" {
 			return fmt.Errorf("config: platforms[%d].type is required", j)
+		}
+	}
+	for i, watcher := range c.ForgejoWatchers {
+		if watcher.Name == "" {
+			return fmt.Errorf("config: forgejo_watchers[%d].name is required", i)
+		}
+		if watcher.BaseURL == "" {
+			return fmt.Errorf("config: forgejo_watchers[%d].base_url is required", i)
+		}
+		if watcher.Username == "" {
+			return fmt.Errorf("config: forgejo_watchers[%d].username is required", i)
+		}
+		if watcher.SessionKey == "" {
+			return fmt.Errorf("config: forgejo_watchers[%d].session_key is required", i)
+		}
+		if watcher.Token == "" && watcher.TokenEnv == "" {
+			return fmt.Errorf("config: forgejo_watchers[%d].token or token_env is required", i)
 		}
 	}
 	return nil

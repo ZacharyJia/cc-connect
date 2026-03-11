@@ -44,9 +44,10 @@ type AdminPromptRequest struct {
 }
 
 type AdminCreateSessionRequest struct {
-	Project string `json:"project"`
-	Name    string `json:"name"`
-	WorkDir string `json:"work_dir"`
+	Project    string `json:"project"`
+	SessionKey string `json:"session_key"`
+	Name       string `json:"name"`
+	WorkDir    string `json:"work_dir"`
 }
 
 // NewAPIServer creates an API server on a Unix socket.
@@ -350,7 +351,7 @@ func (s *APIServer) handleAdminCreateSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	result, err := engine.CreateSession("", req.Name, req.WorkDir)
+	result, err := engine.CreateSession(req.SessionKey, req.Name, req.WorkDir)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

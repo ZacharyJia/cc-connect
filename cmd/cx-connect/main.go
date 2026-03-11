@@ -61,6 +61,9 @@ func main() {
 		case "daemon":
 			runDaemon(os.Args[2:])
 			return
+		case "forgejo-watch":
+			runForgejoWatch(os.Args[2:])
+			return
 		}
 	}
 

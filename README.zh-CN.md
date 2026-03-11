@@ -453,6 +453,36 @@ token = "xxxx"
 
 完整带注释的配置模板见 [config.example.toml](config.example.toml)。
 
+### Forgejo Watcher
+
+可通过 `forgejo_watchers` 轮询 Forgejo 实例，记录分配给用户的 issue、该用户创建的 PR，并把更新串行注入到 cx-connect session。
+
+```toml
+[[forgejo_watchers]]
+name = "ops"
+base_url = "https://forgejo.example.com"
+token_env = "FORGEJO_TOKEN"
+username = "zachary"
+session_key = "telegram:123456:123456"
+poll_interval = "1m"
+work_dir = "default"
+state = "open"
+```
+
+命令：
+
+```bash
+cx-connect forgejo-watch list
+cx-connect forgejo-watch run --name ops
+cx-connect forgejo-watch run --name ops --once
+```
+
+行为说明：
+
+- 新发现的 issue / PR 会在配置的 `session_key` 下创建 session。
+- watcher 任一时刻最多只会自动注入一个 prompt。
+- 只要 cx-connect 实例里存在任意忙碌 session，Forgejo 更新就会继续排队，等下一轮再尝试。
+
 ## 扩展开发
 
 ### 添加新平台

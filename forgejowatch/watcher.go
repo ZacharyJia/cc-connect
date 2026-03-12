@@ -20,14 +20,15 @@ const (
 )
 
 type Config struct {
-	Name         string
-	BaseURL      string
-	Token        string
-	Username     string
-	SessionKey   string
-	PollInterval time.Duration
-	WorkDir      string
-	State        string
+	Name                  string
+	BaseURL               string
+	Token                 string
+	Username              string
+	SessionKey            string
+	PollInterval          time.Duration
+	TriggerOnSelfActivity bool
+	WorkDir               string
+	State                 string
 }
 
 type Runner struct {
@@ -506,7 +507,7 @@ func (r *Runner) dispatchNextPending(ctx context.Context, state *State) error {
 		}
 	}
 
-	cluster := pickNextPendingCluster(state)
+	cluster := r.pickNextPendingCluster(state)
 	if cluster == nil {
 		return nil
 	}
@@ -533,10 +534,10 @@ func (r *Runner) dispatchNextPending(ctx context.Context, state *State) error {
 	return nil
 }
 
-func pickNextPendingCluster(state *State) *TrackedCluster {
+func (r *Runner) pickNextPendingCluster(state *State) *TrackedCluster {
 	var clusters []*TrackedCluster
 	for _, cluster := range state.Clusters {
-		if len(cluster.Pending) == 0 {
+		if len(cluster.Pending) == 0 || !r.clusterReadyForDispatch(cluster) {
 			continue
 		}
 		clusters = append(clusters, cluster)
@@ -564,6 +565,32 @@ func pickNextPendingCluster(state *State) *TrackedCluster {
 		return nil
 	}
 	return clusters[0]
+}
+
+func (r *Runner) clusterReadyForDispatch(cluster *TrackedCluster) bool {
+	for _, event := range cluster.Pending {
+		if r.eventReadyForDispatch(event) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runner) eventReadyForDispatch(event PendingEvent) bool {
+	if r.cfg.TriggerOnSelfActivity {
+		return true
+	}
+	switch event.Kind {
+	case "init":
+		if event.Entity.Kind != "pull" {
+			return true
+		}
+		return hasExternalComments(event.Comments, r.cfg.Username)
+	case "comment":
+		return hasExternalComments(event.Comments, r.cfg.Username)
+	default:
+		return len(event.Comments) > 0
+	}
 }
 
 func clusterHasComments(cluster *TrackedCluster) bool {
@@ -700,6 +727,19 @@ func snapshotComments(comments []ForgejoComment) []PendingComment {
 		})
 	}
 	return out
+}
+
+func hasExternalComments(comments []PendingComment, username string) bool {
+	for _, comment := range comments {
+		if !sameForgejoUser(comment.Author, username) {
+			return true
+		}
+	}
+	return false
+}
+
+func sameForgejoUser(left, right string) bool {
+	return strings.EqualFold(strings.TrimSpace(left), strings.TrimSpace(right))
 }
 
 func ensureMember(cluster *TrackedCluster, entityID string) {

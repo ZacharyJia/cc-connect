@@ -462,6 +462,7 @@ token_env = "FORGEJO_TOKEN"
 username = "zachary"
 session_key = "telegram:123456:123456"
 poll_interval = "1m"
+trigger_on_self_activity = false
 work_dir = "default"
 state = "open"
 ```
@@ -479,6 +480,7 @@ Behavior notes:
 - New issues and PRs create sessions under the configured `session_key`.
 - The watcher never injects more than one prompt at a time.
 - If any session in the cx-connect instance is busy, pending Forgejo updates wait for the next poll.
+- By default, self-authored PR activity or self-only comment batches are queued and only sent once another user comments. Set `trigger_on_self_activity = true` to restore eager triggering.
 
 ## Extending
 

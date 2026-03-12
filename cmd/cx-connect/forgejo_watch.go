@@ -128,14 +128,15 @@ func buildForgejoWatcherRunner(cfg *config.Config, raw config.ForgejoWatcherConf
 
 	statePath := filepath.Join(cfg.DataDir, "forgejo-watch", raw.Name+".json")
 	return forgejowatch.NewRunner(forgejowatch.Config{
-		Name:         raw.Name,
-		BaseURL:      raw.BaseURL,
-		Token:        token,
-		Username:     raw.Username,
-		SessionKey:   raw.SessionKey,
-		PollInterval: pollInterval,
-		WorkDir:      raw.WorkDir,
-		State:        raw.State,
+		Name:                  raw.Name,
+		BaseURL:               raw.BaseURL,
+		Token:                 token,
+		Username:              raw.Username,
+		SessionKey:            raw.SessionKey,
+		PollInterval:          pollInterval,
+		TriggerOnSelfActivity: raw.TriggerOnSelfActivity,
+		WorkDir:               raw.WorkDir,
+		State:                 raw.State,
 	}, statePath, resolveSocketPath(cfg.DataDir))
 }
 

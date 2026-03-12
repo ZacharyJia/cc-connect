@@ -74,15 +74,16 @@ type LogConfig struct {
 }
 
 type ForgejoWatcherConfig struct {
-	Name         string `toml:"name"`
-	BaseURL      string `toml:"base_url"`
-	Token        string `toml:"token"`
-	TokenEnv     string `toml:"token_env"`
-	Username     string `toml:"username"`
-	SessionKey   string `toml:"session_key"`
-	PollInterval string `toml:"poll_interval"`
-	WorkDir      string `toml:"work_dir"`
-	State        string `toml:"state"`
+	Name                  string `toml:"name"`
+	BaseURL               string `toml:"base_url"`
+	Token                 string `toml:"token"`
+	TokenEnv              string `toml:"token_env"`
+	Username              string `toml:"username"`
+	SessionKey            string `toml:"session_key"`
+	PollInterval          string `toml:"poll_interval"`
+	TriggerOnSelfActivity bool   `toml:"trigger_on_self_activity"`
+	WorkDir               string `toml:"work_dir"`
+	State                 string `toml:"state"`
 }
 
 func Load(path string) (*Config, error) {

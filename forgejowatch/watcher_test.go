@@ -2,6 +2,7 @@ package forgejowatch
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -100,9 +101,89 @@ func TestPickNextPendingClusterPrefersComments(t *testing.T) {
 			},
 		},
 	}
-	cluster := pickNextPendingCluster(state)
+	runner := NewRunnerWithClients(Config{
+		Username: "zachary",
+	}, &StateStore{state: state}, &fakeForgejo{}, &fakeAdmin{})
+	cluster := runner.pickNextPendingCluster(state)
 	if cluster == nil || cluster.ID != "comment" {
 		t.Fatalf("unexpected cluster pick: %+v", cluster)
+	}
+}
+
+func TestSyncSkipsSelfOnlyPullActivityUntilExternalComment(t *testing.T) {
+	now := time.Date(2026, 3, 12, 9, 0, 0, 0, time.UTC)
+	store := &StateStore{
+		path: t.TempDir() + "/state.json",
+		state: &State{
+			Entities: make(map[string]*TrackedEntity),
+			Clusters: make(map[string]*TrackedCluster),
+			Aliases:  make(map[string]string),
+		},
+	}
+	forgejo := &fakeForgejo{
+		pulls: []ForgejoIssue{
+			{
+				Number:    18,
+				Title:     "Add watcher improvements",
+				Body:      "Implements the watcher change",
+				HTMLURL:   "https://forgejo.example/acme/app/pulls/18",
+				UpdatedAt: now,
+				Repository: ForgejoRepository{
+					FullName: "acme/app",
+					Name:     "app",
+					Owner:    ForgejoOwner{Login: "acme"},
+				},
+			},
+		},
+		comments: map[string][]ForgejoComment{},
+	}
+	admin := &fakeAdmin{}
+	runner := NewRunnerWithClients(Config{
+		Name:       "ops",
+		Username:   "zachary",
+		SessionKey: "telegram:ops:1",
+	}, store, forgejo, admin)
+	runner.now = func() time.Time { return now }
+
+	if err := runner.Sync(context.Background()); err != nil {
+		t.Fatalf("Sync first pass: %v", err)
+	}
+	if len(admin.prompts) != 0 {
+		t.Fatalf("expected no prompt for self-created pull without external comments, got %d", len(admin.prompts))
+	}
+
+	key := entityID("acme", "app", 18)
+	forgejo.comments[key] = []ForgejoComment{
+		{
+			ID:        1,
+			Body:      "I'll handle this shortly.",
+			CreatedAt: now.Add(time.Minute),
+			User:      ForgejoUser{Login: "zachary"},
+		},
+	}
+	runner.now = func() time.Time { return now.Add(time.Minute) }
+	if err := runner.Sync(context.Background()); err != nil {
+		t.Fatalf("Sync second pass: %v", err)
+	}
+	if len(admin.prompts) != 0 {
+		t.Fatalf("expected no prompt for self-only comment, got %d", len(admin.prompts))
+	}
+
+	forgejo.comments[key] = append(forgejo.comments[key], ForgejoComment{
+		ID:        2,
+		Body:      "Please update the tests.",
+		CreatedAt: now.Add(2 * time.Minute),
+		User:      ForgejoUser{Login: "reviewer"},
+	})
+	runner.now = func() time.Time { return now.Add(2 * time.Minute) }
+	if err := runner.Sync(context.Background()); err != nil {
+		t.Fatalf("Sync third pass: %v", err)
+	}
+	if len(admin.prompts) != 1 {
+		t.Fatalf("expected one prompt after external comment, got %d", len(admin.prompts))
+	}
+	if !strings.Contains(admin.prompts[0].Prompt, "zachary") || !strings.Contains(admin.prompts[0].Prompt, "reviewer") {
+		t.Fatalf("expected bundled prompt to contain self and external comments, got %q", admin.prompts[0].Prompt)
 	}
 }
 

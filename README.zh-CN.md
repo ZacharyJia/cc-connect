@@ -465,6 +465,7 @@ token_env = "FORGEJO_TOKEN"
 username = "zachary"
 session_key = "telegram:123456:123456"
 poll_interval = "1m"
+trigger_on_self_activity = false
 work_dir = "default"
 state = "open"
 ```
@@ -482,6 +483,7 @@ cx-connect forgejo-watch run --name ops --once
 - 新发现的 issue / PR 会在配置的 `session_key` 下创建 session。
 - watcher 任一时刻最多只会自动注入一个 prompt。
 - 只要 cx-connect 实例里存在任意忙碌 session，Forgejo 更新就会继续排队，等下一轮再尝试。
+- 默认情况下，watch 用户自己创建的 PR 活动、或仅包含自己评论的增量批次都会先排队，等其他人评论时再一并发送；如果想恢复原来的立即触发行为，可设置 `trigger_on_self_activity = true`。
 
 ## 扩展开发
 

@@ -62,6 +62,66 @@ func TestEngineSubmitPromptActivatesRequestedSession(t *testing.T) {
 	}
 }
 
+func TestHandleMessageDoesNotReuseAgentSessionAcrossLocalSessions(t *testing.T) {
+	agent := &testAgent{}
+	platform := &testPlatform{name: "telegram"}
+	engine := NewEngine("default", agent, []Platform{platform}, "", LangEnglish, []config.AllowUser{})
+
+	sessionKey := "telegram:chat:user"
+	first := engine.sessions.NewSession(sessionKey, "first", "/tmp/first")
+	second := engine.sessions.NewSession(sessionKey, "second", "/tmp/second")
+
+	if _, err := engine.sessions.SetActiveSession(sessionKey, first.ID); err != nil {
+		t.Fatalf("SetActiveSession(first): %v", err)
+	}
+
+	engine.handleMessage(platform, &Message{
+		SessionKey: sessionKey,
+		Platform:   "telegram",
+		UserID:     "user",
+		UserName:   "tester",
+		Content:    "prompt for first",
+		ReplyCtx:   "reply",
+	})
+
+	waitForCondition(t, func() bool {
+		snap, ok := engine.sessions.SessionSnapshot(sessionKey, first.ID, true)
+		return ok && snap.AgentSessionID != "" && len(snap.History) >= 2
+	})
+
+	firstSnap, ok := engine.sessions.SessionSnapshot(sessionKey, first.ID, true)
+	if !ok {
+		t.Fatalf("missing snapshot for %s", first.ID)
+	}
+
+	if _, err := engine.sessions.SetActiveSession(sessionKey, second.ID); err != nil {
+		t.Fatalf("SetActiveSession(second): %v", err)
+	}
+
+	engine.handleMessage(platform, &Message{
+		SessionKey: sessionKey,
+		Platform:   "telegram",
+		UserID:     "user",
+		UserName:   "tester",
+		Content:    "prompt for second",
+		ReplyCtx:   "reply",
+	})
+
+	waitForCondition(t, func() bool {
+		snap, ok := engine.sessions.SessionSnapshot(sessionKey, second.ID, true)
+		return ok && snap.AgentSessionID != "" && len(snap.History) >= 2
+	})
+
+	secondSnap, ok := engine.sessions.SessionSnapshot(sessionKey, second.ID, true)
+	if !ok {
+		t.Fatalf("missing snapshot for %s", second.ID)
+	}
+
+	if firstSnap.AgentSessionID == secondSnap.AgentSessionID {
+		t.Fatalf("expected different agent session ids, got %q for both", firstSnap.AgentSessionID)
+	}
+}
+
 func TestEngineAdminSessionGroupsExposeActiveAndHistoryCounts(t *testing.T) {
 	engine := NewEngine("default", &testAgent{}, []Platform{&testPlatform{name: "telegram"}}, "", LangEnglish, []config.AllowUser{})
 

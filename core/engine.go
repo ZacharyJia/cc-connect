@@ -558,19 +558,34 @@ func (e *Engine) processInteractiveMessage(p Platform, msg *Message, session *Se
 }
 
 func (e *Engine) getOrCreateInteractiveState(sessionKey string, p Platform, replyCtx any, session *Session) *interactiveState {
-	e.interactiveMu.Lock()
-	defer e.interactiveMu.Unlock()
-
-	state, ok := e.interactiveStates[sessionKey]
-	if ok && state.agentSession != nil && state.agentSession.Alive() {
-		state.session = session
-		return state
-	}
+	var staleState *interactiveState
 	progressMode := progressOutputConcise
+
+	e.interactiveMu.Lock()
+	state, ok := e.interactiveStates[sessionKey]
 	if ok && state != nil {
 		state.mu.Lock()
 		progressMode = normalizeProgressOutputMode(state.progressMode)
+		currentSession := state.session
 		state.mu.Unlock()
+
+		if state.agentSession != nil && state.agentSession.Alive() && currentSession != nil && currentSession.ID == session.ID {
+			state.mu.Lock()
+			state.session = session
+			state.platform = p
+			state.replyCtx = replyCtx
+			state.mu.Unlock()
+			e.interactiveMu.Unlock()
+			return state
+		}
+
+		delete(e.interactiveStates, sessionKey)
+		staleState = state
+	}
+	e.interactiveMu.Unlock()
+
+	if staleState != nil {
+		e.closeInteractiveState(staleState, true)
 	}
 
 	// Inject per-session env vars so the agent subprocess can call `cx-connect cron add` etc.
@@ -591,14 +606,18 @@ func (e *Engine) getOrCreateInteractiveState(sessionKey string, p Platform, repl
 		slog.Error("failed to start interactive session", "error", err)
 		state = newInteractiveState(p, replyCtx, progressMode)
 		state.session = session
+		e.interactiveMu.Lock()
 		e.interactiveStates[sessionKey] = state
+		e.interactiveMu.Unlock()
 		return state
 	}
 
 	state = newInteractiveState(p, replyCtx, progressMode)
 	state.agentSession = agentSession
 	state.session = session
+	e.interactiveMu.Lock()
 	e.interactiveStates[sessionKey] = state
+	e.interactiveMu.Unlock()
 
 	slog.Info("interactive session started", "session_key", sessionKey, "agent_session", session.AgentSessionID)
 	return state

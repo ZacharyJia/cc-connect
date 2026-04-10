@@ -886,7 +886,7 @@ const dashboardHTML = `<!doctype html>
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-    const ROOM_LIMIT = 8;
+    const ROOM_LIMIT = 5;
     const viewState = {
       active: "classic",
       app: null
@@ -1039,10 +1039,12 @@ const dashboardHTML = `<!doctype html>
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.target.set(0, 2, 0);
+      controls.enablePan = false;
+      controls.target.set(0, 1.35, 0);
       controls.minDistance = 12;
       controls.maxDistance = 52;
       controls.maxPolarAngle = Math.PI * 0.48;
+      controls.update();
 
       const ambient = new THREE.HemisphereLight(0xfff6e8, 0x7c8a8f, 1.15);
       scene.add(ambient);
@@ -1104,8 +1106,16 @@ const dashboardHTML = `<!doctype html>
         workerLayer: workerLayer,
         summary: summary,
         rooms: new Map(),
+        roomSlotByKey: new Map(),
         workers: new Map(),
         clock: new THREE.Clock(),
+        fixedRoomSlots: [
+          new THREE.Vector3(-16, 0, -10),
+          new THREE.Vector3(16, 0, -10),
+          new THREE.Vector3(-16, 0, 10),
+          new THREE.Vector3(16, 0, 10),
+          new THREE.Vector3(0, 0, 18)
+        ],
         resize: () => {
           const bounds = viewport.getBoundingClientRect();
           const width = Math.max(bounds.width, 1);
@@ -1125,17 +1135,38 @@ const dashboardHTML = `<!doctype html>
       return app;
     }
 
-    function roomLayout(repos) {
+    function roomLayout(app, repos) {
       const rooms = [];
       rooms.push({ key: "休息室", title: "休息室", type: "lounge", position: new THREE.Vector3(0, 0, 0), size: { width: 10, depth: 8 } });
-      const radius = 18;
-      repos.forEach((repo, index) => {
-        const angle = (index / Math.max(repos.length, 1)) * Math.PI * 2 - Math.PI / 2;
+
+      const activeKeys = new Set(repos);
+      Array.from(app.roomSlotByKey.keys()).forEach((key) => {
+        if (activeKeys.has(key)) return;
+        app.roomSlotByKey.delete(key);
+      });
+
+      repos.forEach((repo) => {
+        if (app.roomSlotByKey.has(repo)) return;
+        for (let i = 0; i < app.fixedRoomSlots.length; i++) {
+          let occupied = false;
+          app.roomSlotByKey.forEach((slotIndex) => {
+            if (slotIndex === i) occupied = true;
+          });
+          if (occupied) continue;
+          app.roomSlotByKey.set(repo, i);
+          break;
+        }
+      });
+
+      repos.forEach((repo) => {
+        const slotIndex = app.roomSlotByKey.get(repo);
+        if (slotIndex === undefined) return;
+        const slot = app.fixedRoomSlots[slotIndex];
         rooms.push({
           key: repo,
           title: repo,
           type: repo === "其他仓库" ? "overflow" : "repo",
-          position: new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius),
+          position: slot.clone(),
           size: { width: 8.5, depth: 6.5 }
         });
       });
@@ -1437,7 +1468,7 @@ const dashboardHTML = `<!doctype html>
     }
 
     function rebuildRooms(app, world) {
-      const layout = roomLayout(world.repos);
+      const layout = roomLayout(app, world.repos);
       const nextKeys = new Set(layout.map((room) => room.key));
 
       Array.from(app.rooms.entries()).forEach(([key, record]) => {

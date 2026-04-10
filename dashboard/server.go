@@ -593,7 +593,6 @@ const dashboardHTML = `<!doctype html>
     }
 
     .worker-bubble,
-    .room-label,
     .worker-tag {
       font-family: "IBM Plex Sans", "PingFang SC", "Noto Sans SC", sans-serif;
       color: var(--ink);
@@ -619,16 +618,6 @@ const dashboardHTML = `<!doctype html>
       color: white;
       font-size: 11px;
       box-shadow: 0 10px 22px rgba(21, 32, 43, 0.18);
-      white-space: nowrap;
-    }
-
-    .room-label {
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.88);
-      color: var(--ink);
-      box-shadow: 0 10px 24px rgba(21, 32, 43, 0.12);
-      font-size: 12px;
       white-space: nowrap;
     }
 
@@ -896,7 +885,6 @@ const dashboardHTML = `<!doctype html>
   <script type="module">
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-    import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 
     const ROOM_LIMIT = 8;
     const viewState = {
@@ -1034,7 +1022,6 @@ const dashboardHTML = `<!doctype html>
 
     function createThreeApp() {
       const viewport = document.getElementById("threeViewport");
-      const labelHost = document.getElementById("threeLabels");
       const summary = document.getElementById("sceneSummary");
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -1042,13 +1029,6 @@ const dashboardHTML = `<!doctype html>
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       viewport.appendChild(renderer.domElement);
-
-      const labelRenderer = new CSS2DRenderer();
-      labelRenderer.domElement.style.position = "absolute";
-      labelRenderer.domElement.style.inset = "0";
-      labelRenderer.domElement.style.pointerEvents = "none";
-      labelHost.innerHTML = "";
-      labelHost.appendChild(labelRenderer.domElement);
 
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0xf0e6d7);
@@ -1117,7 +1097,6 @@ const dashboardHTML = `<!doctype html>
 
       const app = {
         renderer: renderer,
-        labelRenderer: labelRenderer,
         scene: scene,
         camera: camera,
         controls: controls,
@@ -1127,7 +1106,6 @@ const dashboardHTML = `<!doctype html>
         rooms: new Map(),
         workers: new Map(),
         clock: new THREE.Clock(),
-        layoutKey: "",
         resize: () => {
           const bounds = viewport.getBoundingClientRect();
           const width = Math.max(bounds.width, 1);
@@ -1135,11 +1113,9 @@ const dashboardHTML = `<!doctype html>
           camera.aspect = width / height;
           camera.updateProjectionMatrix();
           renderer.setSize(width, height, false);
-          labelRenderer.setSize(width, height);
         },
         render: () => {
           renderer.render(scene, camera);
-          labelRenderer.render(scene, camera);
         }
       };
 
@@ -1166,71 +1142,319 @@ const dashboardHTML = `<!doctype html>
       return rooms;
     }
 
-    function rebuildRooms(app, world) {
-      const layout = roomLayout(world.repos);
-      const key = layout.map((room) => room.key).join("|");
-      if (key === app.layoutKey) {
-        app.rooms.clear();
-        layout.forEach((room) => app.rooms.set(room.key, room));
-        return;
+    function roomColors(room, index) {
+      return room.type === "lounge"
+        ? { floor: 0xc4b08c, wall: 0xf6ebd7 }
+        : room.type === "overflow"
+          ? { floor: 0xb5b0c8, wall: 0xefecff }
+          : roomPalette[index % roomPalette.length];
+    }
+
+    function createGroundLabelTexture(title) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 768;
+      canvas.height = 192;
+      const ctx = canvas.getContext("2d");
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      drawGroundLabelTexture(ctx, canvas, texture, title);
+      return { canvas, ctx, texture };
+    }
+
+    function drawGroundLabelTexture(ctx, canvas, texture, title) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const radius = 64;
+      ctx.fillStyle = "rgba(255,255,255,0.96)";
+      ctx.strokeStyle = "rgba(24,32,39,0.12)";
+      ctx.lineWidth = 6;
+
+      ctx.beginPath();
+      ctx.moveTo(radius, 12);
+      ctx.lineTo(canvas.width - radius, 12);
+      ctx.quadraticCurveTo(canvas.width - 12, 12, canvas.width - 12, radius);
+      ctx.lineTo(canvas.width - 12, canvas.height - radius);
+      ctx.quadraticCurveTo(canvas.width - 12, canvas.height - 12, canvas.width - radius, canvas.height - 12);
+      ctx.lineTo(radius, canvas.height - 12);
+      ctx.quadraticCurveTo(12, canvas.height - 12, 12, canvas.height - radius);
+      ctx.lineTo(12, radius);
+      ctx.quadraticCurveTo(12, 12, radius, 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#182027";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "700 72px IBM Plex Sans, PingFang SC, Noto Sans SC, sans-serif";
+      ctx.fillText(title, canvas.width / 2, canvas.height / 2);
+
+      texture.needsUpdate = true;
+    }
+
+    function createBillboardTexture(width, height, draw) {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      draw(ctx, canvas, texture);
+      return { canvas, ctx, texture };
+    }
+
+    function drawRoundedPanel(ctx, x, y, width, height, radius, fill, stroke, lineWidth) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      if (stroke) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = lineWidth || 1;
+        ctx.stroke();
       }
+    }
 
-      while (app.roomLayer.children.length) {
-        const child = app.roomLayer.children.pop();
-        if (child.parent) child.parent.remove(child);
+    function wrapText(ctx, text, maxWidth) {
+      const words = String(text || "").split(/\s+/).filter(Boolean);
+      if (!words.length) return [""];
+      const lines = [];
+      let line = words[0];
+      for (let i = 1; i < words.length; i++) {
+        const next = line + " " + words[i];
+        if (ctx.measureText(next).width <= maxWidth) {
+          line = next;
+        } else {
+          lines.push(line);
+          line = words[i];
+        }
       }
+      lines.push(line);
+      return lines;
+    }
 
-      app.rooms.clear();
-      layout.forEach((room, index) => {
-        const colorSet = room.type === "lounge"
-          ? { floor: 0xc4b08c, wall: 0xf6ebd7 }
-          : room.type === "overflow"
-            ? { floor: 0xb5b0c8, wall: 0xefecff }
-            : roomPalette[index % roomPalette.length];
+    function drawTagTexture(ctx, canvas, texture, text) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawRoundedPanel(ctx, 8, 8, canvas.width - 16, canvas.height - 16, 46, "rgba(24,32,39,0.86)", "rgba(255,255,255,0.22)", 4);
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "700 46px IBM Plex Sans, PingFang SC, Noto Sans SC, sans-serif";
+      ctx.fillText(String(text || ""), canvas.width / 2, canvas.height / 2 + 1);
+      texture.needsUpdate = true;
+    }
 
-        const group = new THREE.Group();
-        group.position.copy(room.position);
+    function drawBubbleTexture(ctx, canvas, texture, text) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const floor = new THREE.Mesh(
-          new THREE.BoxGeometry(room.size.width, 0.6, room.size.depth),
-          new THREE.MeshStandardMaterial({ color: colorSet.floor, roughness: 0.86, metalness: 0.04 })
-        );
-        floor.receiveShadow = true;
-        floor.position.y = -0.2;
-        group.add(floor);
+      const tailHeight = 28;
+      drawRoundedPanel(ctx, 12, 12, canvas.width - 24, canvas.height - 24 - tailHeight, 36, "rgba(255,255,255,0.96)", "rgba(24,32,39,0.12)", 4);
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2 - 24, canvas.height - 24 - tailHeight);
+      ctx.lineTo(canvas.width / 2, canvas.height - 8);
+      ctx.lineTo(canvas.width / 2 + 24, canvas.height - 24 - tailHeight);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255,255,255,0.96)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(24,32,39,0.12)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
 
-        const wallMaterial = new THREE.MeshStandardMaterial({ color: colorSet.wall, roughness: 0.74, metalness: 0.02 });
-        const wallThickness = 0.28;
-        const wallHeight = room.type === "lounge" ? 2.4 : 2.1;
+      ctx.fillStyle = "#182027";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.font = "600 34px IBM Plex Sans, PingFang SC, Noto Sans SC, sans-serif";
 
-        const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, room.size.depth), wallMaterial);
-        leftWall.position.set(-room.size.width / 2, wallHeight / 2 - 0.1, 0);
-        leftWall.castShadow = true;
-        group.add(leftWall);
-
-        const rightWall = leftWall.clone();
-        rightWall.position.x = room.size.width / 2;
-        group.add(rightWall);
-
-        const backWall = new THREE.Mesh(new THREE.BoxGeometry(room.size.width, wallHeight, wallThickness), wallMaterial);
-        backWall.position.set(0, wallHeight / 2 - 0.1, -room.size.depth / 2);
-        backWall.castShadow = true;
-        group.add(backWall);
-
-        const sign = document.createElement("div");
-        sign.className = "room-label";
-        sign.textContent = room.title;
-        const signObj = new CSS2DObject(sign);
-        signObj.position.set(0, wallHeight + 1.1, 0);
-        group.add(signObj);
-
-        room.label = signObj;
-        room.group = group;
-        app.rooms.set(room.key, room);
-        app.roomLayer.add(group);
+      const lines = wrapText(ctx, String(text || ""), canvas.width - 72).slice(0, 4);
+      const lineHeight = 44;
+      const startY = 38;
+      lines.forEach((line, index) => {
+        ctx.fillText(line, canvas.width / 2, startY + index * lineHeight);
       });
 
-      app.layoutKey = key;
+      texture.needsUpdate = true;
+    }
+
+    function createTextSprite(width, height, worldWidth, worldHeight, draw, renderOrder) {
+      const tex = createBillboardTexture(width, height, draw);
+      const material = new THREE.SpriteMaterial({
+        map: tex.texture,
+        transparent: true,
+        depthWrite: false,
+        sizeAttenuation: true
+      });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(worldWidth, worldHeight, 1);
+      sprite.renderOrder = renderOrder || 0;
+      return {
+        sprite,
+        material,
+        texture: tex.texture,
+        canvas: tex.canvas,
+        ctx: tex.ctx
+      };
+    }
+
+    function createRoomRecord(room, index) {
+      const colors = roomColors(room, index);
+      const wallHeight = room.type === "lounge" ? 2.4 : 2.1;
+      const wallThickness = 0.28;
+
+      const group = new THREE.Group();
+
+      const floorMaterial = new THREE.MeshStandardMaterial({ color: colors.floor, roughness: 0.86, metalness: 0.04 });
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(room.size.width, 0.6, room.size.depth), floorMaterial);
+      floor.receiveShadow = true;
+      floor.position.y = -0.2;
+      group.add(floor);
+
+      const wallMaterial = new THREE.MeshStandardMaterial({ color: colors.wall, roughness: 0.74, metalness: 0.02 });
+      const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, room.size.depth), wallMaterial);
+      leftWall.castShadow = true;
+      group.add(leftWall);
+
+      const rightWall = leftWall.clone();
+      group.add(rightWall);
+
+      const backWall = new THREE.Mesh(new THREE.BoxGeometry(room.size.width, wallHeight, wallThickness), wallMaterial);
+      backWall.castShadow = true;
+      group.add(backWall);
+
+      const labelData = createGroundLabelTexture(room.title);
+      const labelMaterial = new THREE.MeshBasicMaterial({
+        map: labelData.texture,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2
+      });
+      const labelPlane = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(room.size.width * 0.72, 6.2), 1.6), labelMaterial);
+      labelPlane.rotation.x = -Math.PI / 2;
+      labelPlane.position.y = 0.11;
+      group.add(labelPlane);
+
+      return {
+        key: room.key,
+        title: room.title,
+        type: room.type,
+        size: room.size,
+        position: room.position.clone(),
+        wallHeight: wallHeight,
+        group: group,
+        floor: floor,
+        floorMaterial: floorMaterial,
+        wallMaterial: wallMaterial,
+        leftWall: leftWall,
+        rightWall: rightWall,
+        backWall: backWall,
+        labelPlane: labelPlane,
+        labelMaterial: labelMaterial,
+        labelTexture: labelData.texture,
+        labelCanvas: labelData.canvas,
+        labelCtx: labelData.ctx
+      };
+    }
+
+    function updateRoomRecord(record, room, index) {
+      const colors = roomColors(room, index);
+      const wallHeight = room.type === "lounge" ? 2.4 : 2.1;
+      const wallThickness = 0.28;
+
+      record.key = room.key;
+      record.type = room.type;
+      record.size = room.size;
+      record.wallHeight = wallHeight;
+      record.group.position.copy(room.position);
+      record.position = room.position.clone();
+
+      record.floor.material.color.setHex(colors.floor);
+      record.floor.position.y = -0.2;
+
+      record.leftWall.position.set(-room.size.width / 2, wallHeight / 2 - 0.1, 0);
+      record.rightWall.position.set(room.size.width / 2, wallHeight / 2 - 0.1, 0);
+      record.backWall.position.set(0, wallHeight / 2 - 0.1, -room.size.depth / 2);
+      record.wallMaterial.color.setHex(colors.wall);
+
+      if (record.title !== room.title) {
+        record.title = room.title;
+        drawGroundLabelTexture(record.labelCtx, record.labelCanvas, record.labelTexture, room.title);
+      }
+
+      record.labelPlane.position.set(0, 0.11, room.size.depth * 0.18);
+      record.labelPlane.scale.set(1, 1, 1);
+      record.labelPlane.material.map = record.labelTexture;
+
+      const desiredWidth = Math.min(room.size.width * 0.72, 6.2);
+      const desiredHeight = 1.6;
+      record.labelPlane.geometry.dispose();
+      record.labelPlane.geometry = new THREE.PlaneGeometry(desiredWidth, desiredHeight);
+      record.labelPlane.rotation.x = -Math.PI / 2;
+
+      if (record.leftWall.geometry.parameters.depth !== room.size.depth || record.leftWall.geometry.parameters.height !== wallHeight) {
+        record.leftWall.geometry.dispose();
+        record.leftWall.geometry = new THREE.BoxGeometry(wallThickness, wallHeight, room.size.depth);
+      }
+      if (record.rightWall.geometry.parameters.depth !== room.size.depth || record.rightWall.geometry.parameters.height !== wallHeight) {
+        record.rightWall.geometry.dispose();
+        record.rightWall.geometry = new THREE.BoxGeometry(wallThickness, wallHeight, room.size.depth);
+      }
+      if (record.backWall.geometry.parameters.width !== room.size.width || record.backWall.geometry.parameters.height !== wallHeight) {
+        record.backWall.geometry.dispose();
+        record.backWall.geometry = new THREE.BoxGeometry(room.size.width, wallHeight, wallThickness);
+      }
+      if (record.floor.geometry.parameters.width !== room.size.width || record.floor.geometry.parameters.depth !== room.size.depth) {
+        record.floor.geometry.dispose();
+        record.floor.geometry = new THREE.BoxGeometry(room.size.width, 0.6, room.size.depth);
+      }
+    }
+
+    function disposeRoomRecord(record) {
+      if (!record) return;
+      if (record.floor && record.floor.geometry) record.floor.geometry.dispose();
+      if (record.leftWall && record.leftWall.geometry) record.leftWall.geometry.dispose();
+      if (record.rightWall && record.rightWall.geometry) record.rightWall.geometry.dispose();
+      if (record.backWall && record.backWall.geometry) record.backWall.geometry.dispose();
+      if (record.labelPlane && record.labelPlane.geometry) record.labelPlane.geometry.dispose();
+      if (record.floorMaterial) record.floorMaterial.dispose();
+      if (record.wallMaterial) record.wallMaterial.dispose();
+      if (record.labelMaterial) record.labelMaterial.dispose();
+      if (record.labelTexture) record.labelTexture.dispose();
+      if (record.group && record.group.parent) {
+        record.group.parent.remove(record.group);
+      }
+    }
+
+    function rebuildRooms(app, world) {
+      const layout = roomLayout(world.repos);
+      const nextKeys = new Set(layout.map((room) => room.key));
+
+      Array.from(app.rooms.entries()).forEach(([key, record]) => {
+        if (nextKeys.has(key)) return;
+        disposeRoomRecord(record);
+        app.rooms.delete(key);
+      });
+
+      layout.forEach((room, index) => {
+        let record = app.rooms.get(room.key);
+        if (!record) {
+          record = createRoomRecord(room, index);
+          app.rooms.set(room.key, record);
+          app.roomLayer.add(record.group);
+        }
+        updateRoomRecord(record, room, index);
+      });
     }
 
     function workerColors(status) {
@@ -1300,19 +1524,18 @@ const dashboardHTML = `<!doctype html>
       shadow.position.y = 0.01;
       root.add(shadow);
 
-      const bubble = document.createElement("div");
-      bubble.className = "worker-bubble";
-      bubble.textContent = worker.bubble || "";
-      const bubbleObj = new CSS2DObject(bubble);
-      bubbleObj.position.set(0, 4.4, 0);
-      root.add(bubbleObj);
+      const bubble = createTextSprite(640, 320, 3.9, 1.95, (ctx, canvas, texture) => {
+        drawBubbleTexture(ctx, canvas, texture, worker.bubble || "");
+      }, 12);
+      bubble.sprite.position.set(0, 4.65, 0);
+      bubble.sprite.visible = !!worker.bubble;
+      root.add(bubble.sprite);
 
-      const tag = document.createElement("div");
-      tag.className = "worker-tag";
-      tag.textContent = worker.instanceName;
-      const tagObj = new CSS2DObject(tag);
-      tagObj.position.set(0, 3.8, 0);
-      root.add(tagObj);
+      const tag = createTextSprite(384, 96, 2.65, 0.68, (ctx, canvas, texture) => {
+        drawTagTexture(ctx, canvas, texture, worker.instanceName);
+      }, 11);
+      tag.sprite.position.set(0, 3.9, 0);
+      root.add(tag.sprite);
 
       return {
         id: worker.instanceId,
@@ -1320,10 +1543,18 @@ const dashboardHTML = `<!doctype html>
         bodyShell: bodyShell,
         torsoMaterial: bodyMaterial,
         accentMaterial: accentMaterial,
-        bubbleEl: bubble,
-        bubbleObj: bubbleObj,
-        tagEl: tag,
-        tagObj: tagObj,
+        bubbleSprite: bubble.sprite,
+        bubbleMaterial: bubble.material,
+        bubbleTexture: bubble.texture,
+        bubbleCanvas: bubble.canvas,
+        bubbleCtx: bubble.ctx,
+        tagSprite: tag.sprite,
+        tagMaterial: tag.material,
+        tagTexture: tag.texture,
+        tagCanvas: tag.canvas,
+        tagCtx: tag.ctx,
+        bubbleText: worker.bubble || "",
+        tagText: worker.instanceName,
         arms: [leftArm, rightArm],
         legs: [leftLeg, rightLeg],
         phase: Math.random() * Math.PI * 2,
@@ -1378,15 +1609,26 @@ const dashboardHTML = `<!doctype html>
         const colors = workerColors(worker.status);
         node.torsoMaterial.color.setHex(colors.body);
         node.accentMaterial.color.setHex(colors.accent);
-        node.tagEl.textContent = worker.instanceName;
-        node.bubbleEl.textContent = worker.bubble || "";
-        node.bubbleEl.style.display = worker.bubble ? "block" : "none";
+        if (node.tagText !== worker.instanceName) {
+          node.tagText = worker.instanceName;
+          drawTagTexture(node.tagCtx, node.tagCanvas, node.tagTexture, worker.instanceName);
+        }
+        const bubbleText = worker.bubble || "";
+        if (node.bubbleText !== bubbleText) {
+          node.bubbleText = bubbleText;
+          drawBubbleTexture(node.bubbleCtx, node.bubbleCanvas, node.bubbleTexture, bubbleText);
+        }
+        node.bubbleSprite.visible = !!bubbleText;
       });
 
       Array.from(app.workers.keys()).forEach((id) => {
         if (activeIds.has(id)) return;
         const node = app.workers.get(id);
         if (!node) return;
+        if (node.bubbleTexture) node.bubbleTexture.dispose();
+        if (node.bubbleMaterial) node.bubbleMaterial.dispose();
+        if (node.tagTexture) node.tagTexture.dispose();
+        if (node.tagMaterial) node.tagMaterial.dispose();
         app.workerLayer.remove(node.root);
         app.workers.delete(id);
       });
@@ -1435,7 +1677,8 @@ const dashboardHTML = `<!doctype html>
         worker.arms[1].rotation.x = moving ? -Math.sin(elapsed * 10 + worker.phase) * 0.65 : -Math.sin(elapsed * 2 + worker.phase) * 0.08;
         worker.legs[0].rotation.x = moving ? -Math.sin(elapsed * 10 + worker.phase) * 0.48 : 0;
         worker.legs[1].rotation.x = moving ? Math.sin(elapsed * 10 + worker.phase) * 0.48 : 0;
-        worker.bubbleObj.position.y = 4.45 + (moving ? 0.04 : 0.08) * Math.sin(elapsed * 2 + worker.phase);
+        worker.bubbleSprite.position.y = 4.52 + (moving ? 0.04 : 0.08) * Math.sin(elapsed * 2 + worker.phase);
+        worker.tagSprite.position.y = 3.9 + (moving ? 0.02 : 0.04) * Math.sin(elapsed * 2 + worker.phase + 0.8);
       });
 
       app.render();

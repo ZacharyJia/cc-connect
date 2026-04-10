@@ -116,10 +116,12 @@ func (s *Server) handleInstances(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 
 	sort.Slice(instances, func(i, j int) bool {
-		if instances[i].Online != instances[j].Online {
-			return instances[i].Online
+		left := strings.ToLower(instances[i].InstanceID)
+		right := strings.ToLower(instances[j].InstanceID)
+		if left == right {
+			return instances[i].LastSeenAt.After(instances[j].LastSeenAt)
 		}
-		return instances[i].LastSeenAt.After(instances[j].LastSeenAt)
+		return left < right
 	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -323,6 +325,21 @@ const dashboardHTML = `<!doctype html>
       overflow-wrap: anywhere;
     }
 
+    .current-session {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(24,32,39,0.04);
+      border: 1px solid rgba(24,32,39,0.06);
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .current-session.active {
+      border-color: rgba(15,118,110,0.26);
+      background: rgba(15,118,110,0.08);
+    }
+
     .session-line {
       padding: 10px 12px;
       border-radius: 14px;
@@ -341,6 +358,76 @@ const dashboardHTML = `<!doctype html>
       padding-top: 10px;
       display: grid;
       gap: 10px;
+    }
+
+    .group-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .ghost-button {
+      border: 0;
+      border-radius: 999px;
+      padding: 9px 14px;
+      background: rgba(24,32,39,0.08);
+      color: var(--ink);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .ghost-button:hover {
+      background: rgba(24,32,39,0.12);
+    }
+
+    dialog.session-dialog {
+      width: min(860px, calc(100vw - 24px));
+      border: 0;
+      border-radius: 24px;
+      padding: 0;
+      background: rgba(255,255,255,0.96);
+      color: var(--ink);
+      box-shadow: 0 28px 90px rgba(21, 32, 43, 0.28);
+    }
+
+    dialog.session-dialog::backdrop {
+      background: rgba(24,32,39,0.32);
+      backdrop-filter: blur(4px);
+    }
+
+    .dialog-shell {
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .dialog-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .dialog-title {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: -0.04em;
+    }
+
+    .dialog-close {
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: rgba(24,32,39,0.08);
+      color: var(--ink);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .dialog-sessions {
+      display: grid;
+      gap: 10px;
+      max-height: min(68vh, 640px);
+      overflow-y: auto;
     }
 
     .runtime-grid {
@@ -412,7 +499,7 @@ const dashboardHTML = `<!doctype html>
     <section id="instances" class="instance-list"></section>
   </div>
   <script>
-    const state = { timer: null };
+    const state = { timer: null, openDialogId: null };
 
     function esc(value) {
       return String(value ?? "")
@@ -431,8 +518,18 @@ const dashboardHTML = `<!doctype html>
       return '<div class="runtime-box"><h3>' + esc(title) + '</h3><pre>' + esc(content || "-") + '</pre></div>';
     }
 
-    function renderGroup(group) {
+    function dialogId(instance, group) {
+      return "dlg_" + String(instance.instance_id || "") + "__" + String(group.session_key || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+    }
+
+    function findCurrentSession(group) {
+      const sessions = group.sessions || [];
+      return sessions.find((session) => session.active || session.id === group.active_session_id) || sessions[0] || null;
+    }
+
+    function renderGroup(instance, group) {
       const runtime = group.runtime || {};
+      const current = findCurrentSession(group);
       const sessions = (group.sessions || []).map((session) => {
         const cls = session.active ? "session-line active" : "session-line";
         const busy = session.busy ? "处理中" : "空闲";
@@ -444,6 +541,9 @@ const dashboardHTML = `<!doctype html>
           +   '<div class="muted">history: ' + esc(session.history_count) + ' · ' + esc(busy) + '</div>'
           + '</div>';
       }).join("");
+      const currentBusy = current && current.busy ? "处理中" : "空闲";
+      const currentCls = current && (current.active || current.id === group.active_session_id) ? "current-session active" : "current-session";
+      const dlgID = dialogId(instance, group);
 
       const events = (runtime.recent_events || [])
         .slice(-4)
@@ -460,7 +560,17 @@ const dashboardHTML = `<!doctype html>
         +     '<strong>' + esc(group.session_key) + '</strong>'
         +     '<div class="muted">platform: ' + esc(group.platform) + ' · active: ' + esc(group.active_session_id || "-") + ' · interactive: ' + (group.interactive ? "yes" : "no") + '</div>'
         +   '</div>'
-        +   '<div>' + (sessions || '<div class="muted">暂无 session</div>') + '</div>'
+        +   (current
+              ? '<div class="' + currentCls + '">'
+                + '<strong>当前 Session: ' + esc(current.name) + ' <span class="pill">' + esc(current.id) + '</span></strong>'
+                + '<div class="muted">workdir: ' + esc(current.work_dir || "-") + '</div>'
+                + '<div class="muted">agent_session: ' + esc(current.agent_session_id || "-") + '</div>'
+                + '<div class="muted">history: ' + esc(current.history_count) + ' · ' + esc(currentBusy) + '</div>'
+                + '</div>'
+              : '<div class="muted">暂无 session</div>')
+        +   ((group.sessions || []).length
+              ? '<div class="group-actions"><button class="ghost-button" type="button" data-dialog-open="' + esc(dlgID) + '">查看全部 Sessions（' + esc((group.sessions || []).length) + '）</button></div>'
+              : '')
         +   '<div class="runtime">'
         +     '<div class="muted">运行状态: ' + esc(runtime.status || "idle") + ' · 更新时间: ' + esc(fmtTime(runtime.updated_at)) + '</div>'
         +     '<div class="runtime-grid">'
@@ -470,13 +580,25 @@ const dashboardHTML = `<!doctype html>
         +       runtimeBox("最近外发消息", outbound)
         +     '</div>'
         +   '</div>'
+        +   '<dialog class="session-dialog" id="' + esc(dlgID) + '">'
+        +     '<div class="dialog-shell">'
+        +       '<div class="dialog-head">'
+        +         '<div>'
+        +           '<h3 class="dialog-title">Sessions</h3>'
+        +           '<div class="muted">' + esc(group.session_key) + ' · ' + esc(group.platform) + '</div>'
+        +         '</div>'
+        +         '<button class="dialog-close" type="button" data-dialog-close="' + esc(dlgID) + '">关闭</button>'
+        +       '</div>'
+        +       '<div class="dialog-sessions">' + (sessions || '<div class="muted">暂无 session</div>') + '</div>'
+        +     '</div>'
+        +   '</dialog>'
         + '</article>';
     }
 
     function renderInstance(instance) {
       const statusClass = instance.online ? "pill online" : "pill offline";
       const statusLabel = instance.online ? "online" : "offline";
-      const groups = (instance.groups || []).map(renderGroup).join("");
+      const groups = (instance.groups || []).map((group) => renderGroup(instance, group)).join("");
       return ''
         + '<section class="instance">'
         +   '<div class="instance-head">'
@@ -493,6 +615,13 @@ const dashboardHTML = `<!doctype html>
         +   '</div>'
         +   '<div class="group-list">' + (groups || '<div class="empty">这个实例还没有上报任何 session。</div>') + '</div>'
         + '</section>';
+    }
+
+    function restoreDialog() {
+      if (!state.openDialogId) return;
+      const dialog = document.getElementById(state.openDialogId);
+      if (!dialog || dialog.open) return;
+      dialog.showModal();
     }
 
     async function refresh() {
@@ -512,6 +641,7 @@ const dashboardHTML = `<!doctype html>
         return;
       }
       root.innerHTML = instances.map(renderInstance).join("");
+      restoreDialog();
     }
 
     async function tick() {
@@ -526,6 +656,35 @@ const dashboardHTML = `<!doctype html>
     }
 
     tick();
+
+    document.addEventListener("click", (event) => {
+      const openID = event.target.closest("[data-dialog-open]")?.getAttribute("data-dialog-open");
+      if (openID) {
+        const dialog = document.getElementById(openID);
+        if (dialog) {
+          state.openDialogId = openID;
+          dialog.showModal();
+        }
+        return;
+      }
+
+      const closeID = event.target.closest("[data-dialog-close]")?.getAttribute("data-dialog-close");
+      if (closeID) {
+        const dialog = document.getElementById(closeID);
+        if (dialog) {
+          dialog.close();
+        }
+        if (state.openDialogId === closeID) {
+          state.openDialogId = null;
+        }
+      }
+    });
+
+    document.addEventListener("close", (event) => {
+      if (event.target.matches && event.target.matches("dialog.session-dialog") && state.openDialogId === event.target.id) {
+        state.openDialogId = null;
+      }
+    }, true);
   </script>
 </body>
 </html>`

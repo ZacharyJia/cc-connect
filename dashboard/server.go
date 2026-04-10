@@ -971,8 +971,18 @@ const dashboardHTML = `<!doctype html>
       return parts.join(" · ").slice(0, 160);
     }
 
+    function roomStatusRank(status) {
+      switch (status) {
+        case "error": return 4;
+        case "blocked": return 3;
+        case "working": return 2;
+        default: return 1;
+      }
+    }
+
     function buildWorldData(payload) {
       const instances = (payload && payload.instances) || [];
+      const repoStates = {};
       const workers = instances.map((instance) => {
         const group = pickPrimaryGroup(instance);
         const currentSession = group ? findCurrentSession(group) : null;
@@ -999,6 +1009,14 @@ const dashboardHTML = `<!doctype html>
         };
       });
 
+      workers.forEach((worker) => {
+        if (!worker.repo) return;
+        const current = repoStates[worker.repo];
+        if (!current || roomStatusRank(worker.status) > roomStatusRank(current)) {
+          repoStates[worker.repo] = worker.status;
+        }
+      });
+
       const recentRepos = [];
       const seenRepos = new Set();
       workers
@@ -1016,7 +1034,8 @@ const dashboardHTML = `<!doctype html>
 
       return {
         workers: workers,
-        repos: selectedRepos
+        repos: selectedRepos,
+        repoStates: repoStates
       };
     }
 
@@ -1032,18 +1051,23 @@ const dashboardHTML = `<!doctype html>
 
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0xf0e6d7);
-      scene.fog = new THREE.Fog(0xf0e6d7, 30, 70);
 
       const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 160);
-      camera.position.set(0, 18, 26);
+      camera.position.set(0, 20, 30);
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.enablePan = false;
-      controls.target.set(0, 1.35, 0);
+      controls.enablePan = true;
+      controls.screenSpacePanning = true;
+      controls.target.set(0, 0, 0);
       controls.minDistance = 12;
-      controls.maxDistance = 52;
+      controls.maxDistance = 78;
       controls.maxPolarAngle = Math.PI * 0.48;
+      controls.mouseButtons = {
+        LEFT: THREE.MOUSE.PAN,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.ROTATE
+      };
       controls.update();
 
       const ambient = new THREE.HemisphereLight(0xfff6e8, 0x7c8a8f, 1.15);
@@ -1135,9 +1159,10 @@ const dashboardHTML = `<!doctype html>
       return app;
     }
 
-    function roomLayout(app, repos) {
+    function roomLayout(app, world) {
+      const repos = world.repos || [];
       const rooms = [];
-      rooms.push({ key: "休息室", title: "休息室", type: "lounge", position: new THREE.Vector3(0, 0, 0), size: { width: 10, depth: 8 } });
+      rooms.push({ key: "休息室", title: "休息室", type: "lounge", status: "idle", position: new THREE.Vector3(0, 0, 0), size: { width: 10, depth: 8 } });
 
       const activeKeys = new Set(repos);
       Array.from(app.roomSlotByKey.keys()).forEach((key) => {
@@ -1166,6 +1191,7 @@ const dashboardHTML = `<!doctype html>
           key: repo,
           title: repo,
           type: repo === "其他仓库" ? "overflow" : "repo",
+          status: (world.repoStates && world.repoStates[repo]) || "idle",
           position: slot.clone(),
           size: { width: 8.5, depth: 6.5 }
         });
@@ -1174,11 +1200,22 @@ const dashboardHTML = `<!doctype html>
     }
 
     function roomColors(room, index) {
-      return room.type === "lounge"
+      let base = room.type === "lounge"
         ? { floor: 0xc4b08c, wall: 0xf6ebd7 }
         : room.type === "overflow"
           ? { floor: 0xb5b0c8, wall: 0xefecff }
           : roomPalette[index % roomPalette.length];
+
+      if (room.status === "working") {
+        return { floor: 0x4d9f8f, wall: 0xdff6f0 };
+      }
+      if (room.status === "blocked") {
+        return { floor: 0xd38a30, wall: 0xfff1d8 };
+      }
+      if (room.status === "error") {
+        return { floor: 0xc46a6a, wall: 0xffe1e1 };
+      }
+      return base;
     }
 
     function createGroundLabelTexture(title) {
@@ -1380,6 +1417,7 @@ const dashboardHTML = `<!doctype html>
         key: room.key,
         title: room.title,
         type: room.type,
+        status: room.status,
         size: room.size,
         position: room.position.clone(),
         wallHeight: wallHeight,
@@ -1405,6 +1443,7 @@ const dashboardHTML = `<!doctype html>
 
       record.key = room.key;
       record.type = room.type;
+      record.status = room.status;
       record.size = room.size;
       record.wallHeight = wallHeight;
       record.group.position.copy(room.position);
@@ -1468,7 +1507,7 @@ const dashboardHTML = `<!doctype html>
     }
 
     function rebuildRooms(app, world) {
-      const layout = roomLayout(app, world.repos);
+      const layout = roomLayout(app, world);
       const nextKeys = new Set(layout.map((room) => room.key));
 
       Array.from(app.rooms.entries()).forEach(([key, record]) => {

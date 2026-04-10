@@ -94,6 +94,16 @@ npm install -g cx-connect
 npm install -g cx-connect@beta
 ```
 
+**通过 `go install` 安装（需要 Go 1.22+）：**
+
+```bash
+# 安装工作节点二进制
+go install github.com/ZacharyJia/cx-connect/cmd/cx-connect@latest
+
+# 安装中央看板二进制
+go install github.com/ZacharyJia/cx-connect/cmd/cx-board@latest
+```
+
 **从 [GitHub Releases](https://github.com/ZacharyJia/cx-connect/releases) 下载二进制：**
 
 ```bash

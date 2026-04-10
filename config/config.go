@@ -20,12 +20,22 @@ type Config struct {
 	Language        string                 `toml:"language"` // "en" or "zh", default is "en"
 	Speech          SpeechConfig           `toml:"speech"`
 	Web             WebConfig              `toml:"web"`
+	Dashboard       DashboardConfig        `toml:"dashboard"`
 	ForgejoWatchers []ForgejoWatcherConfig `toml:"forgejo_watchers"`
 }
 
 type WebConfig struct {
 	Enabled bool   `toml:"enabled"`
 	Listen  string `toml:"listen"`
+}
+
+type DashboardConfig struct {
+	Enabled      bool   `toml:"enabled"`
+	Endpoint     string `toml:"endpoint"`
+	Token        string `toml:"token"`
+	InstanceID   string `toml:"instance_id"`
+	InstanceName string `toml:"instance_name"`
+	Heartbeat    string `toml:"heartbeat"`
 }
 
 // SpeechConfig configures speech-to-text for voice messages.
@@ -141,6 +151,9 @@ func (c *Config) validate() error {
 		if watcher.Token == "" && watcher.TokenEnv == "" {
 			return fmt.Errorf("config: forgejo_watchers[%d].token or token_env is required", i)
 		}
+	}
+	if c.Dashboard.Enabled && c.Dashboard.Endpoint == "" {
+		return fmt.Errorf("config: [dashboard].endpoint is required when dashboard is enabled")
 	}
 	return nil
 }

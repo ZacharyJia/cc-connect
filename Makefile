@@ -1,6 +1,8 @@
 APP        := cx-connect
+BOARD_APP  := cx-board
 MODULE     := github.com/ZacharyJia/cx-connect
 CMD        := ./cmd/cx-connect
+BOARD_CMD  := ./cmd/cx-board
 DIST       := dist
 
 VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -20,10 +22,13 @@ PLATFORMS := \
   windows/amd64 \
   windows/arm64
 
-.PHONY: build run clean test lint release release-all
+.PHONY: build build-board run clean test lint release release-all
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(APP) $(CMD)
+
+build-board:
+	go build -ldflags "$(LDFLAGS)" -o $(BOARD_APP) $(BOARD_CMD)
 
 run: build
 	./$(APP)

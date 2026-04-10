@@ -138,6 +138,16 @@ language = "en"
 # enabled = true
 # listen = "127.0.0.1:6380"
 
+# Report local instance status to a central dashboard service.
+# The dashboard server can be started with the `cx-board` binary.
+# [dashboard]
+# enabled = true
+# endpoint = "http://127.0.0.1:7390"
+# token = ""                 # optional bearer token shared with cx-board
+# instance_id = "node-a"     # optional stable instance id
+# instance_name = "Shanghai-Worker-A"
+# heartbeat = "5s"
+
 [log]
 level = "info" # debug, info, warn, error
 

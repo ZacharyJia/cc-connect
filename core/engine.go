@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ZacharyJia/cx-connect/config"
+	"github.com/ZacharyJia/cx-connect/dashboard"
 )
 
 const (
@@ -55,6 +56,7 @@ type Engine struct {
 	providerRemoveSaveFunc func(name string) error
 
 	cronScheduler *CronScheduler
+	reporter      *dashboard.Reporter
 
 	// Interactive agent session management
 	interactiveMu     sync.Mutex
@@ -214,7 +216,7 @@ func (e *Engine) ExecuteCronJob(job *CronJob) error {
 	if desc == "" {
 		desc = truncateStr(job.Prompt, 40)
 	}
-	e.send(targetPlatform, replyCtx, fmt.Sprintf("⏰ %s", desc))
+	e.sendSession(sessionKey, targetPlatform, replyCtx, fmt.Sprintf("⏰ %s", desc))
 
 	msg := &Message{
 		SessionKey: sessionKey,
@@ -333,13 +335,13 @@ func (e *Engine) handleMessage(p Platform, msg *Message) {
 
 func (e *Engine) handleVoiceMessage(p Platform, msg *Message) {
 	if !e.speech.Enabled || e.speech.STT == nil {
-		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgVoiceNotEnabled))
+		e.replySession(msg.SessionKey, p, msg.ReplyCtx, e.i18n.T(MsgVoiceNotEnabled))
 		return
 	}
 
 	audio := msg.Audio
 	if NeedsConversion(audio.Format) && !HasFFmpeg() {
-		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgVoiceNoFFmpeg))
+		e.replySession(msg.SessionKey, p, msg.ReplyCtx, e.i18n.T(MsgVoiceNoFFmpeg))
 		return
 	}
 
@@ -347,23 +349,23 @@ func (e *Engine) handleVoiceMessage(p Platform, msg *Message) {
 		"platform", msg.Platform, "user", msg.UserName,
 		"format", audio.Format, "size", len(audio.Data),
 	)
-	e.send(p, msg.ReplyCtx, e.i18n.T(MsgVoiceTranscribing))
+	e.sendSession(msg.SessionKey, p, msg.ReplyCtx, e.i18n.T(MsgVoiceTranscribing))
 
 	text, err := TranscribeAudio(e.ctx, e.speech.STT, audio, e.speech.Language)
 	if err != nil {
 		slog.Error("speech transcription failed", "error", err)
-		e.reply(p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgVoiceTranscribeFailed), err))
+		e.replySession(msg.SessionKey, p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgVoiceTranscribeFailed), err))
 		return
 	}
 
 	text = strings.TrimSpace(text)
 	if text == "" {
-		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgVoiceEmpty))
+		e.replySession(msg.SessionKey, p, msg.ReplyCtx, e.i18n.T(MsgVoiceEmpty))
 		return
 	}
 
 	slog.Info("voice transcribed", "text_len", len(text))
-	e.send(p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgVoiceTranscribed), text))
+	e.sendSession(msg.SessionKey, p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgVoiceTranscribed), text))
 
 	// Replace audio with transcribed text and re-dispatch
 	msg.Audio = nil
@@ -518,6 +520,9 @@ func (e *Engine) processInteractiveMessage(p Platform, msg *Message, session *Se
 
 	e.i18n.DetectAndSet(msg.Content)
 	session.AddHistory("user", msg.Content)
+	if e.reporter != nil {
+		e.reporter.ObserveInbound(msg.SessionKey, msg.Content)
+	}
 
 	state := e.getOrCreateInteractiveState(msg.SessionKey, p, msg.ReplyCtx, session)
 
@@ -528,7 +533,7 @@ func (e *Engine) processInteractiveMessage(p Platform, msg *Message, session *Se
 	state.mu.Unlock()
 
 	if state.agentSession == nil {
-		e.reply(p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgError), "failed to start agent session"))
+		e.replySession(msg.SessionKey, p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgError), "failed to start agent session"))
 		return
 	}
 
@@ -537,19 +542,19 @@ func (e *Engine) processInteractiveMessage(p Platform, msg *Message, session *Se
 
 		if !state.agentSession.Alive() {
 			e.cleanupInteractiveState(msg.SessionKey)
-			e.send(p, msg.ReplyCtx, e.i18n.T(MsgSessionRestarting))
+			e.sendSession(msg.SessionKey, p, msg.ReplyCtx, e.i18n.T(MsgSessionRestarting))
 
 			state = e.getOrCreateInteractiveState(msg.SessionKey, p, msg.ReplyCtx, session)
 			if state.agentSession == nil {
-				e.reply(p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgError), "failed to restart agent session"))
+				e.replySession(msg.SessionKey, p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgError), "failed to restart agent session"))
 				return
 			}
 			if err := state.agentSession.Send(msg.Content, msg.Images); err != nil {
-				e.reply(p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgError), err))
+				e.replySession(msg.SessionKey, p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgError), err))
 				return
 			}
 		} else {
-			e.reply(p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgError), err))
+			e.replySession(msg.SessionKey, p, msg.ReplyCtx, fmt.Sprintf(e.i18n.T(MsgError), err))
 			return
 		}
 	}
@@ -715,17 +720,18 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 
 		switch event.Type {
 		case EventThinking:
+			e.reportEvent(sessionKey, event)
 			if event.Content != "" {
 				preview := truncate(event.Content, 300)
 				switch mode {
 				case progressOutputVerbose:
-					e.send(p, replyCtx, fmt.Sprintf(e.i18n.T(MsgThinking), preview))
+					e.sendSession(sessionKey, p, replyCtx, fmt.Sprintf(e.i18n.T(MsgThinking), preview))
 				case progressOutputConcise:
 					progress.observeThinking(preview)
 					// Throttle frequent thought updates to avoid flood while keeping one draft fresh.
 					if time.Since(lastDraftAt) >= 1200*time.Millisecond {
 						rendered := renderConciseDraftContent(e.i18n.CurrentLang(), progress, codexDraftParts, false)
-						if updated := e.upsertDraft(p, replyCtx, &draftCtx, rendered); updated {
+						if updated := e.upsertDraftSession(sessionKey, p, replyCtx, &draftCtx, rendered); updated {
 							lastDraftAt = time.Now()
 						}
 					}
@@ -733,27 +739,32 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			}
 
 		case EventToolUse:
+			e.reportEvent(sessionKey, event)
 			toolCount++
 			switch mode {
 			case progressOutputVerbose:
 				inputPreview := truncate(event.ToolInput, 500)
-				e.send(p, replyCtx, fmt.Sprintf(e.i18n.T(MsgTool), toolCount, event.ToolName, inputPreview))
+				e.sendSession(sessionKey, p, replyCtx, fmt.Sprintf(e.i18n.T(MsgTool), toolCount, event.ToolName, inputPreview))
 			case progressOutputConcise:
 				progress.observeTool(toolCount, event.ToolName)
 				rendered := renderConciseDraftContent(e.i18n.CurrentLang(), progress, codexDraftParts, false)
-				if updated := e.upsertDraft(p, replyCtx, &draftCtx, rendered); updated {
+				if updated := e.upsertDraftSession(sessionKey, p, replyCtx, &draftCtx, rendered); updated {
 					lastDraftAt = time.Now()
 				}
 			}
 
+		case EventToolResult:
+			e.reportEvent(sessionKey, event)
+
 		case EventText:
+			e.reportEvent(sessionKey, event)
 			if event.Content != "" {
 				textParts = append(textParts, event.Content)
 				if isCodex {
 					switch mode {
 					case progressOutputVerbose:
 						for _, chunk := range splitMessage(event.Content, maxPlatformMessageLen) {
-							e.send(p, replyCtx, chunk)
+							e.sendSession(sessionKey, p, replyCtx, chunk)
 						}
 						codexVerboseStreamed = true
 					case progressOutputConcise:
@@ -761,7 +772,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 						if codexPendingLast != "" {
 							codexDraftParts = append(codexDraftParts, codexPendingLast)
 							rendered := renderConciseDraftContent(e.i18n.CurrentLang(), progress, codexDraftParts, false)
-							if updated := e.upsertDraft(p, replyCtx, &draftCtx, rendered); updated {
+							if updated := e.upsertDraftSession(sessionKey, p, replyCtx, &draftCtx, rendered); updated {
 								lastDraftAt = time.Now()
 							}
 						}
@@ -775,6 +786,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			}
 
 		case EventPermissionRequest:
+			e.reportEvent(sessionKey, event)
 			state.mu.Lock()
 			autoApprove := state.approveAll
 			state.mu.Unlock()
@@ -794,7 +806,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			)
 
 			prompt := fmt.Sprintf(e.i18n.T(MsgPermissionPrompt), event.ToolName, truncate(event.ToolInput, 800))
-			e.send(p, replyCtx, prompt)
+			e.sendSession(sessionKey, p, replyCtx, prompt)
 
 			pending := &pendingPermission{
 				RequestID:    event.RequestID,
@@ -815,6 +827,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			slog.Info("permission resolved", "request_id", event.RequestID)
 
 		case EventResult:
+			e.reportEvent(sessionKey, event)
 			if event.SessionID != "" {
 				session.AgentSessionID = event.SessionID
 			}
@@ -870,7 +883,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 
 					if draftCtx != nil {
 						rendered := renderConciseDraftContent(lang, progress, codexDraftParts, true)
-						e.updateDraft(p, draftCtx, rendered)
+						e.updateDraftSession(sessionKey, p, draftCtx, rendered)
 					}
 
 					if finalMessage != "" {
@@ -889,7 +902,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				finalOutbound = fullResponse
 				if mode == progressOutputConcise && draftCtx != nil {
 					rendered := renderConciseDraftContent(lang, progress, nil, true)
-					e.updateDraft(p, draftCtx, rendered)
+					e.updateDraftSession(sessionKey, p, draftCtx, rendered)
 				}
 			}
 
@@ -903,25 +916,39 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				"response_len", len(fullResponse),
 			)
 			if strings.TrimSpace(finalOutbound) == "" {
+				if e.reporter != nil {
+					e.reporter.ObserveTurnFinished(sessionKey, "idle", fullResponse)
+				}
 				return
 			}
 
 			for _, chunk := range splitMessage(finalOutbound, maxPlatformMessageLen) {
+				e.reportOutbound(sessionKey, "send", chunk)
 				if err := p.Send(e.ctx, replyCtx, chunk); err != nil {
 					slog.Error("failed to send reply", "error", err)
+					if e.reporter != nil {
+						e.reporter.ObserveTurnFinished(sessionKey, "error", fullResponse)
+					}
 					return
 				}
+			}
+			if e.reporter != nil {
+				e.reporter.ObserveTurnFinished(sessionKey, "idle", fullResponse)
 			}
 			return
 
 		case EventError:
+			e.reportEvent(sessionKey, event)
 			if event.Error != nil {
 				slog.Error("agent error", "error", event.Error)
 				if mode == progressOutputConcise && draftCtx != nil {
 					rendered := renderConciseDraftContent(e.i18n.CurrentLang(), progress, codexDraftParts, true)
-					e.updateDraft(p, draftCtx, rendered)
+					e.updateDraftSession(sessionKey, p, draftCtx, rendered)
 				}
-				e.send(p, replyCtx, fmt.Sprintf(e.i18n.T(MsgError), event.Error))
+				e.sendSession(sessionKey, p, replyCtx, fmt.Sprintf(e.i18n.T(MsgError), event.Error))
+				if e.reporter != nil {
+					e.reporter.ObserveTurnFinished(sessionKey, "error", "")
+				}
 			}
 			return
 		}
@@ -935,6 +962,9 @@ processExited:
 	// Channel closed - process exited unexpectedly
 	slog.Warn("agent process exited", "session_key", sessionKey)
 	e.cleanupInteractiveState(sessionKey)
+	if e.reporter != nil {
+		e.reporter.ObserveTurnFinished(sessionKey, "error", "")
+	}
 
 	if len(textParts) > 0 {
 		state.mu.Lock()
@@ -953,7 +983,10 @@ processExited:
 		}
 		session.AddHistory("assistant", fullResponse)
 		for _, chunk := range splitMessage(fullResponse, maxPlatformMessageLen) {
-			e.send(p, replyCtx, chunk)
+			e.sendSession(sessionKey, p, replyCtx, chunk)
+		}
+		if e.reporter != nil {
+			e.reporter.ObserveTurnFinished(sessionKey, "idle", fullResponse)
 		}
 	}
 }
@@ -1826,7 +1859,62 @@ func (e *Engine) SendToSession(sessionKey, message string) error {
 	replyCtx := state.replyCtx
 	state.mu.Unlock()
 
+	e.reportOutbound(sessionKey, "send", message)
 	return p.Send(e.ctx, replyCtx, message)
+}
+
+func (e *Engine) reportEvent(sessionKey string, event Event) {
+	if e.reporter == nil || sessionKey == "" {
+		return
+	}
+
+	content := event.Content
+	if content == "" {
+		switch event.Type {
+		case EventToolUse, EventPermissionRequest:
+			content = event.ToolInput
+		case EventToolResult:
+			content = event.ToolResult
+		case EventError:
+			if event.Error != nil {
+				content = event.Error.Error()
+			}
+		}
+	}
+	e.reporter.ObserveEvent(sessionKey, string(event.Type), content, event.ToolName)
+}
+
+func (e *Engine) reportOutbound(sessionKey, kind, content string) {
+	if e.reporter == nil || sessionKey == "" {
+		return
+	}
+	e.reporter.ObserveOutbound(sessionKey, kind, content)
+}
+
+func (e *Engine) sendSession(sessionKey string, p Platform, replyCtx any, content string) {
+	e.reportOutbound(sessionKey, "send", content)
+	e.send(p, replyCtx, content)
+}
+
+func (e *Engine) replySession(sessionKey string, p Platform, replyCtx any, content string) {
+	e.reportOutbound(sessionKey, "reply", content)
+	e.reply(p, replyCtx, content)
+}
+
+func (e *Engine) upsertDraftSession(sessionKey string, p Platform, baseReplyCtx any, draftCtx *any, content string) bool {
+	updated := e.upsertDraft(p, baseReplyCtx, draftCtx, content)
+	if updated {
+		e.reportOutbound(sessionKey, "draft", content)
+	}
+	return updated
+}
+
+func (e *Engine) updateDraftSession(sessionKey string, p Platform, draftCtx any, content string) bool {
+	updated := e.updateDraft(p, draftCtx, content)
+	if updated {
+		e.reportOutbound(sessionKey, "draft_update", content)
+	}
+	return updated
 }
 
 // send wraps p.Send with error logging.

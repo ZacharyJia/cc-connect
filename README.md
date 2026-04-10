@@ -89,6 +89,16 @@ install beta version:
 npm install -g cx-connect@beta
 ```
 
+**Via `go install` (requires Go 1.22+):**
+
+```bash
+# Install the worker binary
+go install github.com/ZacharyJia/cx-connect/cmd/cx-connect@latest
+
+# Install the central dashboard binary
+go install github.com/ZacharyJia/cx-connect/cmd/cx-board@latest
+```
+
 **Download binary from [GitHub Releases](https://github.com/ZacharyJia/cx-connect/releases):**
 
 ```bash

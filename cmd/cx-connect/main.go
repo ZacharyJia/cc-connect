@@ -128,6 +128,15 @@ func main() {
 
 	// Create engine from config (single agent + platforms)
 	engine := createEngine(cfg)
+	reporter, err := createDashboardReporter(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating dashboard reporter: %v\n", err)
+		os.Exit(1)
+	}
+	if reporter != nil {
+		engine.SetDashboardReporter(reporter)
+		reporter.Start(ctx)
+	}
 
 	// Start cron scheduler
 	cronStore, err := core.NewCronStore(cfg.DataDir)

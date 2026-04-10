@@ -1534,7 +1534,7 @@ const dashboardHTML = `<!doctype html>
       const tag = createTextSprite(384, 96, 2.65, 0.68, (ctx, canvas, texture) => {
         drawTagTexture(ctx, canvas, texture, worker.instanceName);
       }, 11);
-      tag.sprite.position.set(0, 3.9, 0);
+      tag.sprite.position.set(0.95, 0.55, 0.2);
       root.add(tag.sprite);
 
       return {
@@ -1678,7 +1678,9 @@ const dashboardHTML = `<!doctype html>
         worker.legs[0].rotation.x = moving ? -Math.sin(elapsed * 10 + worker.phase) * 0.48 : 0;
         worker.legs[1].rotation.x = moving ? Math.sin(elapsed * 10 + worker.phase) * 0.48 : 0;
         worker.bubbleSprite.position.y = 4.52 + (moving ? 0.04 : 0.08) * Math.sin(elapsed * 2 + worker.phase);
-        worker.tagSprite.position.y = 3.9 + (moving ? 0.02 : 0.04) * Math.sin(elapsed * 2 + worker.phase + 0.8);
+        worker.tagSprite.position.x = 0.95;
+        worker.tagSprite.position.z = 0.2 + (moving ? 0.03 : 0.01) * Math.sin(elapsed * 3 + worker.phase);
+        worker.tagSprite.position.y = 0.55 + (moving ? 0.01 : 0.02) * Math.sin(elapsed * 2 + worker.phase + 0.8);
       });
 
       app.render();

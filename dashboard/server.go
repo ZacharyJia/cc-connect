@@ -526,6 +526,12 @@ const dashboardHTML = `<!doctype html>
       inset: 0;
     }
 
+    .scene-canvas canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
     .scene-labels {
       pointer-events: none;
       overflow: hidden;
@@ -1053,11 +1059,15 @@ const dashboardHTML = `<!doctype html>
     function createThreeApp() {
       const viewport = document.getElementById("threeViewport");
       const summary = document.getElementById("sceneSummary");
+      const stage = viewport.closest(".scene-stage");
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setPixelRatio(1);
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.domElement.style.display = "block";
+      renderer.domElement.style.width = "100%";
+      renderer.domElement.style.height = "100%";
       viewport.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
@@ -1144,6 +1154,7 @@ const dashboardHTML = `<!doctype html>
         roomSlotByKey: new Map(),
         workers: new Map(),
         clock: new THREE.Clock(),
+        resizeObserver: null,
         fixedRoomSlots: [
           new THREE.Vector3(-16, 0, -10),
           new THREE.Vector3(16, 0, -10),
@@ -1158,6 +1169,8 @@ const dashboardHTML = `<!doctype html>
           camera.aspect = width / height;
           camera.updateProjectionMatrix();
           renderer.setSize(width, height, false);
+          renderer.domElement.style.width = width + "px";
+          renderer.domElement.style.height = height + "px";
         },
         render: () => {
           renderer.render(scene, camera);
@@ -1165,6 +1178,11 @@ const dashboardHTML = `<!doctype html>
       };
 
       app.resize();
+      app.resizeObserver = new ResizeObserver(() => {
+        app.resize();
+        if (viewState.active === "three") app.render();
+      });
+      app.resizeObserver.observe(stage || viewport);
       window.addEventListener("resize", app.resize);
 
       return app;

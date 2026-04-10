@@ -983,6 +983,7 @@ const dashboardHTML = `<!doctype html>
     function buildWorldData(payload) {
       const instances = (payload && payload.instances) || [];
       const repoStates = {};
+      const repoActivity = new Map();
       const workers = instances.map((instance) => {
         const group = pickPrimaryGroup(instance);
         const currentSession = group ? findCurrentSession(group) : null;
@@ -1009,6 +1010,20 @@ const dashboardHTML = `<!doctype html>
         };
       });
 
+      instances.forEach((instance) => {
+        (instance.groups || []).forEach((group) => {
+          (group.sessions || []).forEach((session) => {
+            const repo = normalizeRepoName(session.name);
+            if (!repo) return;
+            const updatedAt = asTime(session.updated_at);
+            const current = repoActivity.get(repo);
+            if (!current || updatedAt > current.updatedAt) {
+              repoActivity.set(repo, { repo, updatedAt });
+            }
+          });
+        });
+      });
+
       workers.forEach((worker) => {
         if (!worker.repo) return;
         const current = repoStates[worker.repo];
@@ -1017,16 +1032,12 @@ const dashboardHTML = `<!doctype html>
         }
       });
 
-      const recentRepos = [];
-      const seenRepos = new Set();
-      workers
-        .filter((worker) => worker.repo)
-        .sort((left, right) => right.updatedAt - left.updatedAt)
-        .forEach((worker) => {
-          if (seenRepos.has(worker.repo)) return;
-          seenRepos.add(worker.repo);
-          recentRepos.push(worker.repo);
-        });
+      const recentRepos = Array.from(repoActivity.values())
+        .sort((left, right) => {
+          if (left.updatedAt !== right.updatedAt) return right.updatedAt - left.updatedAt;
+          return left.repo.localeCompare(right.repo, "zh-CN");
+        })
+        .map((item) => item.repo);
 
       const selectedRepos = recentRepos.slice(0, ROOM_LIMIT);
       const omittedWorking = workers.some((worker) => worker.status !== "idle" && worker.status !== "offline" && worker.repo && selectedRepos.indexOf(worker.repo) === -1);
@@ -1199,12 +1210,21 @@ const dashboardHTML = `<!doctype html>
       return rooms;
     }
 
-    function roomColors(room, index) {
+    function stablePaletteIndex(key, size) {
+      let hash = 0;
+      const text = String(key || "");
+      for (let i = 0; i < text.length; i++) {
+        hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+      }
+      return Math.abs(hash) % Math.max(size, 1);
+    }
+
+    function roomColors(room) {
       let base = room.type === "lounge"
         ? { floor: 0xc4b08c, wall: 0xf6ebd7 }
         : room.type === "overflow"
           ? { floor: 0xb5b0c8, wall: 0xefecff }
-          : roomPalette[index % roomPalette.length];
+          : roomPalette[stablePaletteIndex(room.key, roomPalette.length)];
 
       if (room.status === "working") {
         return { floor: 0x4d9f8f, wall: 0xdff6f0 };
@@ -1375,7 +1395,7 @@ const dashboardHTML = `<!doctype html>
     }
 
     function createRoomRecord(room, index) {
-      const colors = roomColors(room, index);
+      const colors = roomColors(room);
       const wallHeight = room.type === "lounge" ? 2.4 : 2.1;
       const wallThickness = 0.28;
 
@@ -1437,7 +1457,7 @@ const dashboardHTML = `<!doctype html>
     }
 
     function updateRoomRecord(record, room, index) {
-      const colors = roomColors(room, index);
+      const colors = roomColors(room);
       const wallHeight = room.type === "lounge" ? 2.4 : 2.1;
       const wallThickness = 0.28;
 

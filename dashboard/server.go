@@ -258,6 +258,41 @@ const dashboardHTML = `<!doctype html>
       gap: 16px;
     }
 
+    .view-tabs {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .tab-button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      background: rgba(24,32,39,0.08);
+      color: var(--ink);
+      font: inherit;
+      cursor: pointer;
+      transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+    }
+
+    .tab-button:hover {
+      transform: translateY(-1px);
+      background: rgba(24,32,39,0.12);
+    }
+
+    .tab-button.active {
+      background: linear-gradient(135deg, #0f766e 0%, #0b4f6c 100%);
+      color: white;
+    }
+
+    .view-pane {
+      display: none;
+    }
+
+    .view-pane.active {
+      display: block;
+    }
+
     .instance {
       padding: 18px;
       display: grid;
@@ -467,12 +502,152 @@ const dashboardHTML = `<!doctype html>
       border-radius: var(--radius);
     }
 
+    .scene-shell {
+      display: grid;
+      gap: 16px;
+    }
+
+    .scene-stage {
+      position: relative;
+      min-height: 760px;
+      overflow: hidden;
+      border-radius: calc(var(--radius) + 4px);
+      background:
+        radial-gradient(circle at top, rgba(15, 118, 110, 0.24), transparent 24%),
+        radial-gradient(circle at 20% 20%, rgba(180, 83, 9, 0.2), transparent 20%),
+        linear-gradient(180deg, #f5f0e6 0%, #ebe2d2 40%, #d8d4c7 100%);
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255,255,255,0.65);
+    }
+
+    .scene-canvas,
+    .scene-labels {
+      position: absolute;
+      inset: 0;
+    }
+
+    .scene-labels {
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .scene-hud {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 420px) minmax(0, 360px);
+      justify-content: space-between;
+      gap: 14px;
+      pointer-events: none;
+    }
+
+    .hud-card {
+      pointer-events: auto;
+      background: rgba(255,255,255,0.74);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,0.72);
+      border-radius: 18px;
+      padding: 14px 16px;
+      box-shadow: 0 18px 45px rgba(21, 32, 43, 0.12);
+    }
+
+    .hud-card h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+    }
+
+    .hud-card p {
+      margin: 0;
+      line-height: 1.55;
+      color: var(--ink);
+    }
+
+    .scene-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(24,32,39,0.06);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    .worker-bubble,
+    .room-label,
+    .worker-tag {
+      font-family: "IBM Plex Sans", "PingFang SC", "Noto Sans SC", sans-serif;
+      color: var(--ink);
+      transform: translate(-50%, -50%);
+    }
+
+    .worker-bubble {
+      max-width: 240px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.92);
+      box-shadow: 0 16px 28px rgba(21, 32, 43, 0.18);
+      border: 1px solid rgba(255,255,255,0.9);
+      line-height: 1.45;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    .worker-tag {
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(24,32,39,0.74);
+      color: white;
+      font-size: 11px;
+      box-shadow: 0 10px 22px rgba(21, 32, 43, 0.18);
+      white-space: nowrap;
+    }
+
+    .room-label {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.88);
+      color: var(--ink);
+      box-shadow: 0 10px 24px rgba(21, 32, 43, 0.12);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
     @media (max-width: 900px) {
       .hero { align-items: start; flex-direction: column; }
       .stats { width: 100%; min-width: 0; }
       .shell { width: min(100vw - 20px, 1480px); margin-top: 14px; }
+      .scene-hud { grid-template-columns: 1fr; }
+      .scene-stage { min-height: 620px; }
     }
   </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <div class="shell">
@@ -496,7 +671,37 @@ const dashboardHTML = `<!doctype html>
         </div>
       </div>
     </section>
-    <section id="instances" class="instance-list"></section>
+    <nav class="view-tabs" aria-label="Dashboard Views">
+      <button class="tab-button active" type="button" data-view-tab="classic">默认视图</button>
+      <button class="tab-button" type="button" data-view-tab="three">3D 视图</button>
+    </nav>
+    <section id="classicPane" class="view-pane active">
+      <section id="instances" class="instance-list"></section>
+    </section>
+    <section id="threePane" class="view-pane">
+      <div class="scene-shell">
+        <div class="scene-stage">
+          <div id="threeViewport" class="scene-canvas"></div>
+          <div id="threeLabels" class="scene-labels"></div>
+          <div class="scene-hud">
+            <div class="hud-card">
+              <h3>3D Overview</h3>
+              <p id="sceneSummary">准备中。切换到 3D 视图后，实例会以角色的形式进入仓库房间，空闲实例会回到休息室。</p>
+              <div class="scene-legend">
+                <span class="legend-item"><span class="legend-swatch" style="background:#0f766e"></span>工作中</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:#b45309"></span>等待/阻塞</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:#475569"></span>空闲</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:#b91c1c"></span>异常/离线</span>
+              </div>
+            </div>
+            <div class="hud-card">
+              <h3>操作说明</h3>
+              <p>拖动旋转镜头，滚轮缩放。房间会按最近活跃仓库聚合，角色头顶的气泡会显示最近进度。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
   <script>
     const state = { timer: null, openDialogId: null };
@@ -634,6 +839,8 @@ const dashboardHTML = `<!doctype html>
       document.getElementById("onlineCount").textContent = String(online);
       document.getElementById("totalCount").textContent = String(instances.length);
       document.getElementById("serverTime").textContent = fmtTime(data.server_time);
+      window.__dashboardData = data;
+      window.dispatchEvent(new CustomEvent("dashboard-data", { detail: data }));
 
       const root = document.getElementById("instances");
       if (!instances.length) {
@@ -685,6 +892,589 @@ const dashboardHTML = `<!doctype html>
         state.openDialogId = null;
       }
     }, true);
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+
+    const ROOM_LIMIT = 8;
+    const viewState = {
+      active: "classic",
+      app: null
+    };
+
+    const roomPalette = [
+      { floor: 0x91c7b1, wall: 0xd9f3e8 },
+      { floor: 0xf3bf7a, wall: 0xfff1d6 },
+      { floor: 0x8db4d9, wall: 0xe4f1ff },
+      { floor: 0xd3a6f5, wall: 0xf2e4ff },
+      { floor: 0x9fd3c7, wall: 0xe5faf6 },
+      { floor: 0xe8a598, wall: 0xffece6 },
+      { floor: 0xc4d96f, wall: 0xf4f9d8 },
+      { floor: 0x95b4aa, wall: 0xe7f0ed }
+    ];
+
+    function findCurrentSession(group) {
+      const sessions = group.sessions || [];
+      return sessions.find((session) => session.active || session.id === group.active_session_id) || sessions[0] || null;
+    }
+
+    function normalizeRepoName(sessionName) {
+      const raw = String(sessionName || "").trim();
+      if (!raw) return "";
+      const match = raw.match(/^(.*)-\d+$/);
+      if (match && match[1]) return match[1];
+      return raw;
+    }
+
+    function asTime(value) {
+      const ts = Date.parse(value || "");
+      return Number.isFinite(ts) ? ts : 0;
+    }
+
+    function pickPrimaryGroup(instance) {
+      const groups = (instance.groups || []).slice();
+      groups.sort((left, right) => {
+        const leftSession = findCurrentSession(left);
+        const rightSession = findCurrentSession(right);
+        const leftStatus = rankGroup(instance, left, leftSession);
+        const rightStatus = rankGroup(instance, right, rightSession);
+        if (leftStatus !== rightStatus) return rightStatus - leftStatus;
+        const leftTime = Math.max(asTime((left.runtime || {}).updated_at), asTime((leftSession || {}).updated_at));
+        const rightTime = Math.max(asTime((right.runtime || {}).updated_at), asTime((rightSession || {}).updated_at));
+        return rightTime - leftTime;
+      });
+      return groups[0] || null;
+    }
+
+    function rankGroup(instance, group, currentSession) {
+      if (!instance.online) return 0;
+      const runtime = group.runtime || {};
+      if (runtime.status === "waiting_permission") return 5;
+      if ((currentSession && currentSession.busy) || runtime.status === "running") return 4;
+      if (runtime.status === "error") return 3;
+      if (runtime.status === "completed") return 2;
+      return 1;
+    }
+
+    function deriveWorkerStatus(instance, group, currentSession) {
+      if (!instance.online) return "offline";
+      const runtime = group.runtime || {};
+      if (runtime.status === "error") return "error";
+      if (runtime.status === "waiting_permission") return "blocked";
+      if ((currentSession && currentSession.busy) || runtime.status === "running") return "working";
+      return "idle";
+    }
+
+    function pickBubble(runtime, currentSession, status) {
+      const recentEvent = ((runtime || {}).recent_events || []).slice(-1)[0];
+      const recentOutbound = ((runtime || {}).recent_outbound || []).slice(-1)[0];
+      const parts = [];
+      if (status === "idle") return "休息中";
+      if (status === "offline") return "实例离线";
+      if (status === "error") parts.push("异常处理中");
+      if (status === "blocked") parts.push("等待权限");
+      if (recentEvent && recentEvent.content) parts.push(recentEvent.content);
+      else if (recentOutbound && recentOutbound.content) parts.push(recentOutbound.content);
+      else if ((runtime || {}).last_event_text) parts.push(runtime.last_event_text);
+      else if ((runtime || {}).last_assistant_message) parts.push(runtime.last_assistant_message);
+      else if (currentSession && currentSession.name) parts.push(currentSession.name);
+      return parts.join(" · ").slice(0, 160);
+    }
+
+    function buildWorldData(payload) {
+      const instances = (payload && payload.instances) || [];
+      const workers = instances.map((instance) => {
+        const group = pickPrimaryGroup(instance);
+        const currentSession = group ? findCurrentSession(group) : null;
+        const runtime = group ? (group.runtime || {}) : {};
+        const status = group ? deriveWorkerStatus(instance, group, currentSession) : (instance.online ? "idle" : "offline");
+        const repo = currentSession ? normalizeRepoName(currentSession.name) : "";
+        const updatedAt = Math.max(
+          asTime(instance.last_seen_at),
+          asTime((runtime || {}).updated_at),
+          asTime((currentSession || {}).updated_at)
+        );
+        return {
+          instanceId: String(instance.instance_id || ""),
+          instanceName: String(instance.instance_name || instance.instance_id || ""),
+          project: String(instance.project || ""),
+          online: !!instance.online,
+          lastSeenAt: instance.last_seen_at || "",
+          status: status,
+          repo: repo,
+          bubble: pickBubble(runtime, currentSession, status),
+          currentSession: currentSession,
+          group: group,
+          updatedAt: updatedAt
+        };
+      });
+
+      const recentRepos = [];
+      const seenRepos = new Set();
+      workers
+        .filter((worker) => worker.repo)
+        .sort((left, right) => right.updatedAt - left.updatedAt)
+        .forEach((worker) => {
+          if (seenRepos.has(worker.repo)) return;
+          seenRepos.add(worker.repo);
+          recentRepos.push(worker.repo);
+        });
+
+      const selectedRepos = recentRepos.slice(0, ROOM_LIMIT);
+      const omittedWorking = workers.some((worker) => worker.status !== "idle" && worker.status !== "offline" && worker.repo && selectedRepos.indexOf(worker.repo) === -1);
+      if (omittedWorking) selectedRepos.push("其他仓库");
+
+      return {
+        workers: workers,
+        repos: selectedRepos
+      };
+    }
+
+    function createThreeApp() {
+      const viewport = document.getElementById("threeViewport");
+      const labelHost = document.getElementById("threeLabels");
+      const summary = document.getElementById("sceneSummary");
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      viewport.appendChild(renderer.domElement);
+
+      const labelRenderer = new CSS2DRenderer();
+      labelRenderer.domElement.style.position = "absolute";
+      labelRenderer.domElement.style.inset = "0";
+      labelRenderer.domElement.style.pointerEvents = "none";
+      labelHost.innerHTML = "";
+      labelHost.appendChild(labelRenderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0e6d7);
+      scene.fog = new THREE.Fog(0xf0e6d7, 30, 70);
+
+      const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 160);
+      camera.position.set(0, 18, 26);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.target.set(0, 2, 0);
+      controls.minDistance = 12;
+      controls.maxDistance = 52;
+      controls.maxPolarAngle = Math.PI * 0.48;
+
+      const ambient = new THREE.HemisphereLight(0xfff6e8, 0x7c8a8f, 1.15);
+      scene.add(ambient);
+
+      const sun = new THREE.DirectionalLight(0xffffff, 1.45);
+      sun.position.set(14, 24, 12);
+      sun.castShadow = true;
+      sun.shadow.mapSize.width = 2048;
+      sun.shadow.mapSize.height = 2048;
+      sun.shadow.camera.near = 1;
+      sun.shadow.camera.far = 80;
+      sun.shadow.camera.left = -28;
+      sun.shadow.camera.right = 28;
+      sun.shadow.camera.top = 28;
+      sun.shadow.camera.bottom = -28;
+      scene.add(sun);
+
+      const floor = new THREE.Mesh(
+        new THREE.CylinderGeometry(26, 28, 0.8, 64),
+        new THREE.MeshStandardMaterial({ color: 0xddd2bf, roughness: 0.95, metalness: 0.02 })
+      );
+      floor.receiveShadow = true;
+      floor.position.y = -0.5;
+      scene.add(floor);
+
+      const grid = new THREE.GridHelper(56, 28, 0xffffff, 0xcfc2ae);
+      grid.position.y = -0.08;
+      grid.material.opacity = 0.28;
+      grid.material.transparent = true;
+      scene.add(grid);
+
+      const loungeLight = new THREE.PointLight(0xffd27f, 2.2, 18, 2);
+      loungeLight.position.set(0, 7, 0);
+      scene.add(loungeLight);
+
+      const decorativeRings = new THREE.Group();
+      for (let i = 0; i < 3; i++) {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(7.5 + i * 0.8, 0.05, 12, 64),
+          new THREE.MeshBasicMaterial({ color: i === 1 ? 0xb45309 : 0x0f766e, transparent: true, opacity: 0.18 - i * 0.03 })
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.05 + i * 0.03;
+        decorativeRings.add(ring);
+      }
+      scene.add(decorativeRings);
+
+      const roomLayer = new THREE.Group();
+      const workerLayer = new THREE.Group();
+      scene.add(roomLayer);
+      scene.add(workerLayer);
+
+      const app = {
+        renderer: renderer,
+        labelRenderer: labelRenderer,
+        scene: scene,
+        camera: camera,
+        controls: controls,
+        roomLayer: roomLayer,
+        workerLayer: workerLayer,
+        summary: summary,
+        rooms: new Map(),
+        workers: new Map(),
+        clock: new THREE.Clock(),
+        layoutKey: "",
+        resize: () => {
+          const bounds = viewport.getBoundingClientRect();
+          const width = Math.max(bounds.width, 1);
+          const height = Math.max(bounds.height, 1);
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(width, height, false);
+          labelRenderer.setSize(width, height);
+        },
+        render: () => {
+          renderer.render(scene, camera);
+          labelRenderer.render(scene, camera);
+        }
+      };
+
+      app.resize();
+      window.addEventListener("resize", app.resize);
+
+      return app;
+    }
+
+    function roomLayout(repos) {
+      const rooms = [];
+      rooms.push({ key: "休息室", title: "休息室", type: "lounge", position: new THREE.Vector3(0, 0, 0), size: { width: 10, depth: 8 } });
+      const radius = 18;
+      repos.forEach((repo, index) => {
+        const angle = (index / Math.max(repos.length, 1)) * Math.PI * 2 - Math.PI / 2;
+        rooms.push({
+          key: repo,
+          title: repo,
+          type: repo === "其他仓库" ? "overflow" : "repo",
+          position: new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius),
+          size: { width: 8.5, depth: 6.5 }
+        });
+      });
+      return rooms;
+    }
+
+    function rebuildRooms(app, world) {
+      const layout = roomLayout(world.repos);
+      const key = layout.map((room) => room.key).join("|");
+      if (key === app.layoutKey) {
+        app.rooms.clear();
+        layout.forEach((room) => app.rooms.set(room.key, room));
+        return;
+      }
+
+      while (app.roomLayer.children.length) {
+        const child = app.roomLayer.children.pop();
+        if (child.parent) child.parent.remove(child);
+      }
+
+      app.rooms.clear();
+      layout.forEach((room, index) => {
+        const colorSet = room.type === "lounge"
+          ? { floor: 0xc4b08c, wall: 0xf6ebd7 }
+          : room.type === "overflow"
+            ? { floor: 0xb5b0c8, wall: 0xefecff }
+            : roomPalette[index % roomPalette.length];
+
+        const group = new THREE.Group();
+        group.position.copy(room.position);
+
+        const floor = new THREE.Mesh(
+          new THREE.BoxGeometry(room.size.width, 0.6, room.size.depth),
+          new THREE.MeshStandardMaterial({ color: colorSet.floor, roughness: 0.86, metalness: 0.04 })
+        );
+        floor.receiveShadow = true;
+        floor.position.y = -0.2;
+        group.add(floor);
+
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: colorSet.wall, roughness: 0.74, metalness: 0.02 });
+        const wallThickness = 0.28;
+        const wallHeight = room.type === "lounge" ? 2.4 : 2.1;
+
+        const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, room.size.depth), wallMaterial);
+        leftWall.position.set(-room.size.width / 2, wallHeight / 2 - 0.1, 0);
+        leftWall.castShadow = true;
+        group.add(leftWall);
+
+        const rightWall = leftWall.clone();
+        rightWall.position.x = room.size.width / 2;
+        group.add(rightWall);
+
+        const backWall = new THREE.Mesh(new THREE.BoxGeometry(room.size.width, wallHeight, wallThickness), wallMaterial);
+        backWall.position.set(0, wallHeight / 2 - 0.1, -room.size.depth / 2);
+        backWall.castShadow = true;
+        group.add(backWall);
+
+        const sign = document.createElement("div");
+        sign.className = "room-label";
+        sign.textContent = room.title;
+        const signObj = new CSS2DObject(sign);
+        signObj.position.set(0, wallHeight + 1.1, 0);
+        group.add(signObj);
+
+        room.label = signObj;
+        room.group = group;
+        app.rooms.set(room.key, room);
+        app.roomLayer.add(group);
+      });
+
+      app.layoutKey = key;
+    }
+
+    function workerColors(status) {
+      if (status === "working") return { body: 0x0f766e, accent: 0xf5f5f4 };
+      if (status === "blocked") return { body: 0xb45309, accent: 0xfffbeb };
+      if (status === "error") return { body: 0xb91c1c, accent: 0xfff1f2 };
+      if (status === "offline") return { body: 0x64748b, accent: 0xe2e8f0 };
+      return { body: 0x475569, accent: 0xf8fafc };
+    }
+
+    function createWorkerNode(worker) {
+      const root = new THREE.Group();
+      root.position.set((Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 4);
+
+      const bodyShell = new THREE.Group();
+      root.add(bodyShell);
+
+      const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.62, metalness: 0.08 });
+      const accentMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f4, roughness: 0.7, metalness: 0.04 });
+
+      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 1.05, 6, 12), bodyMaterial);
+      torso.position.y = 1.7;
+      torso.castShadow = true;
+      bodyShell.add(torso);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 24), accentMaterial);
+      head.position.y = 3.05;
+      head.castShadow = true;
+      bodyShell.add(head);
+
+      const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.4, metalness: 0.02 });
+      const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 12), eyeMaterial);
+      eyeLeft.position.set(-0.12, 3.1, 0.37);
+      const eyeRight = eyeLeft.clone();
+      eyeRight.position.x = 0.12;
+      bodyShell.add(eyeLeft);
+      bodyShell.add(eyeRight);
+
+      const armGeo = new THREE.CapsuleGeometry(0.12, 0.7, 4, 10);
+      const legGeo = new THREE.CapsuleGeometry(0.14, 0.9, 4, 10);
+
+      const leftArm = new THREE.Mesh(armGeo, bodyMaterial);
+      leftArm.position.set(-0.58, 1.92, 0);
+      leftArm.rotation.z = 0.24;
+      leftArm.castShadow = true;
+      bodyShell.add(leftArm);
+
+      const rightArm = leftArm.clone();
+      rightArm.position.x = 0.58;
+      rightArm.rotation.z = -0.24;
+      bodyShell.add(rightArm);
+
+      const leftLeg = new THREE.Mesh(legGeo, bodyMaterial);
+      leftLeg.position.set(-0.22, 0.72, 0);
+      leftLeg.castShadow = true;
+      bodyShell.add(leftLeg);
+
+      const rightLeg = leftLeg.clone();
+      rightLeg.position.x = 0.22;
+      bodyShell.add(rightLeg);
+
+      const shadow = new THREE.Mesh(
+        new THREE.CircleGeometry(0.72, 24),
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.12 })
+      );
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.01;
+      root.add(shadow);
+
+      const bubble = document.createElement("div");
+      bubble.className = "worker-bubble";
+      bubble.textContent = worker.bubble || "";
+      const bubbleObj = new CSS2DObject(bubble);
+      bubbleObj.position.set(0, 4.4, 0);
+      root.add(bubbleObj);
+
+      const tag = document.createElement("div");
+      tag.className = "worker-tag";
+      tag.textContent = worker.instanceName;
+      const tagObj = new CSS2DObject(tag);
+      tagObj.position.set(0, 3.8, 0);
+      root.add(tagObj);
+
+      return {
+        id: worker.instanceId,
+        root: root,
+        bodyShell: bodyShell,
+        torsoMaterial: bodyMaterial,
+        accentMaterial: accentMaterial,
+        bubbleEl: bubble,
+        bubbleObj: bubbleObj,
+        tagEl: tag,
+        tagObj: tagObj,
+        arms: [leftArm, rightArm],
+        legs: [leftLeg, rightLeg],
+        phase: Math.random() * Math.PI * 2,
+        target: root.position.clone(),
+        info: worker
+      };
+    }
+
+    function assignRoomTargets(app, world) {
+      const occupants = new Map();
+      world.workers.forEach((worker) => {
+        let roomKey = "休息室";
+        if (worker.status !== "idle" && worker.status !== "offline" && worker.repo) {
+          roomKey = app.rooms.has(worker.repo) ? worker.repo : (app.rooms.has("其他仓库") ? "其他仓库" : "休息室");
+        }
+        if (!occupants.has(roomKey)) occupants.set(roomKey, []);
+        occupants.get(roomKey).push(worker);
+      });
+
+      occupants.forEach((workers, roomKey) => {
+        const room = app.rooms.get(roomKey) || app.rooms.get("休息室");
+        workers.forEach((worker, index) => {
+          const cols = Math.max(1, Math.ceil(Math.sqrt(workers.length)));
+          const row = Math.floor(index / cols);
+          const col = index % cols;
+          const spacingX = room.size.width / (cols + 1);
+          const rows = Math.max(1, Math.ceil(workers.length / cols));
+          const spacingZ = room.size.depth / (rows + 1);
+          const x = -room.size.width / 2 + spacingX * (col + 1);
+          const z = -room.size.depth / 2 + spacingZ * (row + 1) + 0.9;
+          worker.roomKey = roomKey;
+          worker.target = new THREE.Vector3(room.position.x + x, 0, room.position.z + z);
+        });
+      });
+    }
+
+    function syncWorkers(app, world) {
+      assignRoomTargets(app, world);
+      const activeIds = new Set();
+
+      world.workers.forEach((worker) => {
+        activeIds.add(worker.instanceId);
+        let node = app.workers.get(worker.instanceId);
+        if (!node) {
+          node = createWorkerNode(worker);
+          app.workers.set(worker.instanceId, node);
+          app.workerLayer.add(node.root);
+        }
+
+        node.info = worker;
+        node.target.copy(worker.target);
+        const colors = workerColors(worker.status);
+        node.torsoMaterial.color.setHex(colors.body);
+        node.accentMaterial.color.setHex(colors.accent);
+        node.tagEl.textContent = worker.instanceName;
+        node.bubbleEl.textContent = worker.bubble || "";
+        node.bubbleEl.style.display = worker.bubble ? "block" : "none";
+      });
+
+      Array.from(app.workers.keys()).forEach((id) => {
+        if (activeIds.has(id)) return;
+        const node = app.workers.get(id);
+        if (!node) return;
+        app.workerLayer.remove(node.root);
+        app.workers.delete(id);
+      });
+    }
+
+    function updateSummary(app, world) {
+      const total = world.workers.length;
+      const working = world.workers.filter((worker) => worker.status === "working").length;
+      const blocked = world.workers.filter((worker) => worker.status === "blocked").length;
+      const idle = world.workers.filter((worker) => worker.status === "idle").length;
+      const offline = world.workers.filter((worker) => worker.status === "offline").length;
+      const repos = world.repos.filter((repo) => repo !== "其他仓库").slice(0, ROOM_LIMIT).join("、") || "暂无活跃仓库";
+      app.summary.textContent = "当前共有 " + total + " 个实例，其中 " + working + " 个在工作，" + blocked + " 个在等待，" + idle + " 个在休息，" + offline + " 个离线。房间按最近仓库聚合：" + repos + "。";
+    }
+
+    function applyWorldData(payload) {
+      if (!viewState.app) return;
+      const world = buildWorldData(payload);
+      rebuildRooms(viewState.app, world);
+      syncWorkers(viewState.app, world);
+      updateSummary(viewState.app, world);
+    }
+
+    function animate(app) {
+      const delta = Math.min(app.clock.getDelta(), 0.05);
+      const elapsed = app.clock.elapsedTime;
+
+      app.controls.update();
+
+      app.workers.forEach((worker) => {
+        const current = worker.root.position;
+        const target = worker.target;
+        const offset = new THREE.Vector3().subVectors(target, current);
+        const distance = offset.length();
+        const moving = distance > 0.06;
+        if (moving) {
+          const step = Math.min(distance, delta * 4.8);
+          current.add(offset.normalize().multiplyScalar(step));
+          const desiredY = Math.atan2(target.x - current.x, target.z - current.z);
+          worker.root.rotation.y += (desiredY - worker.root.rotation.y) * 0.12;
+        }
+
+        const bob = moving ? Math.sin(elapsed * 10 + worker.phase) * 0.08 : Math.sin(elapsed * 2 + worker.phase) * 0.03;
+        worker.bodyShell.position.y = bob;
+        worker.arms[0].rotation.x = moving ? Math.sin(elapsed * 10 + worker.phase) * 0.65 : Math.sin(elapsed * 2 + worker.phase) * 0.08;
+        worker.arms[1].rotation.x = moving ? -Math.sin(elapsed * 10 + worker.phase) * 0.65 : -Math.sin(elapsed * 2 + worker.phase) * 0.08;
+        worker.legs[0].rotation.x = moving ? -Math.sin(elapsed * 10 + worker.phase) * 0.48 : 0;
+        worker.legs[1].rotation.x = moving ? Math.sin(elapsed * 10 + worker.phase) * 0.48 : 0;
+        worker.bubbleObj.position.y = 4.45 + (moving ? 0.04 : 0.08) * Math.sin(elapsed * 2 + worker.phase);
+      });
+
+      app.render();
+      requestAnimationFrame(() => animate(app));
+    }
+
+    function ensureThreeView() {
+      if (viewState.app) {
+        viewState.app.resize();
+        viewState.app.render();
+        return;
+      }
+      viewState.app = createThreeApp();
+      animate(viewState.app);
+      if (window.__dashboardData) applyWorldData(window.__dashboardData);
+    }
+
+    function setActiveView(view) {
+      viewState.active = view;
+      document.querySelectorAll("[data-view-tab]").forEach((button) => {
+        button.classList.toggle("active", button.getAttribute("data-view-tab") === view);
+      });
+      document.getElementById("classicPane").classList.toggle("active", view === "classic");
+      document.getElementById("threePane").classList.toggle("active", view === "three");
+      if (view === "three") {
+        ensureThreeView();
+      }
+    }
+
+    document.querySelectorAll("[data-view-tab]").forEach((button) => {
+      button.addEventListener("click", () => {
+        setActiveView(button.getAttribute("data-view-tab"));
+      });
+    });
+
+    window.addEventListener("dashboard-data", (event) => {
+      if (!event || !event.detail) return;
+      if (viewState.app) applyWorldData(event.detail);
+    });
   </script>
 </body>
 </html>`

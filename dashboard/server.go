@@ -161,7 +161,7 @@ const dashboardHTML = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CX Connect Dashboard</title>
+  <title>智网畅联AI办公室</title>
   <style>
     :root {
       --bg: #f3f0ea;
@@ -251,6 +251,14 @@ const dashboardHTML = `<!doctype html>
       display: block;
       font-size: 28px;
       margin-top: 6px;
+    }
+
+    .card.time-card strong {
+      font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: 24px;
+      min-width: 19ch;
+      white-space: nowrap;
     }
 
     .instance-list {
@@ -476,6 +484,8 @@ const dashboardHTML = `<!doctype html>
       border-radius: 14px;
       background: rgba(24,32,39,0.045);
       min-height: 88px;
+      display: grid;
+      gap: 8px;
     }
 
     .runtime-box h3 {
@@ -492,6 +502,12 @@ const dashboardHTML = `<!doctype html>
       word-break: break-word;
       font: inherit;
       line-height: 1.5;
+    }
+
+    .runtime-box.scrollable pre {
+      max-height: 240px;
+      overflow: auto;
+      padding-right: 6px;
     }
 
     .empty {
@@ -549,6 +565,22 @@ const dashboardHTML = `<!doctype html>
       pointer-events: none;
     }
 
+    .scene-actions {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      top: auto;
+      left: auto;
+      z-index: 2;
+      display: flex;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .scene-actions .hud-button {
+      pointer-events: auto;
+    }
+
     .hud-card {
       pointer-events: auto;
       background: rgba(255,255,255,0.74);
@@ -557,20 +589,123 @@ const dashboardHTML = `<!doctype html>
       border-radius: 18px;
       padding: 14px 16px;
       box-shadow: 0 18px 45px rgba(21, 32, 43, 0.12);
+      transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+    }
+
+    .hud-card[data-hud-side="left"] {
+      justify-self: start;
+    }
+
+    .hud-card[data-hud-side="right"] {
+      justify-self: end;
+    }
+
+    .hud-card.minimized {
+      width: 56px;
+      min-height: 56px;
+      padding: 8px;
+      align-self: start;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.82);
+      box-shadow: 0 14px 28px rgba(21, 32, 43, 0.16);
+    }
+
+    .hud-card.minimized:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 32px rgba(21, 32, 43, 0.18);
+    }
+
+    .hud-card.minimized .hud-head {
+      justify-content: center;
+      align-items: center;
+    }
+
+    .hud-card.minimized .hud-content {
+      display: none;
+    }
+
+    .hud-card.minimized .hud-title {
+      display: none;
+    }
+
+    .hud-card.minimized .hud-toggle {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border-radius: 14px;
+      border: 1px solid rgba(24,32,39,0.08);
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.9), rgba(255,255,255,0.25) 55%),
+        linear-gradient(135deg, rgba(15,118,110,0.16), rgba(11,79,108,0.08));
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.7),
+        0 8px 16px rgba(21, 32, 43, 0.12);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .hud-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .hud-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .hud-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(24,32,39,0.08);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      flex: 0 0 auto;
     }
 
     .hud-card h3 {
-      margin: 0 0 8px;
+      margin: 0;
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.16em;
       color: var(--muted);
     }
 
+    .hud-content {
+      margin-top: 8px;
+    }
+
     .hud-card p {
       margin: 0;
       line-height: 1.55;
       color: var(--ink);
+    }
+
+    .hud-button {
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: rgba(24,32,39,0.08);
+      color: var(--ink);
+      font: inherit;
+      cursor: pointer;
+      transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+    }
+
+    .hud-button:hover {
+      background: rgba(24,32,39,0.14);
+      transform: translateY(-1px);
     }
 
     .scene-legend {
@@ -633,6 +768,8 @@ const dashboardHTML = `<!doctype html>
       .shell { width: min(100vw - 20px, 1480px); margin-top: 14px; }
       .scene-hud { grid-template-columns: 1fr; }
       .scene-stage { min-height: 620px; }
+      .scene-actions { right: 14px; bottom: 14px; }
+      .card.time-card strong { min-width: 0; font-size: 22px; }
     }
   </style>
   <script type="importmap">
@@ -648,20 +785,20 @@ const dashboardHTML = `<!doctype html>
   <div class="shell">
     <section class="hero">
       <div>
-        <h1>CX Connect Fleet</h1>
-        <p>汇总多个实例的活跃 session、agent 事件和外发进度消息。</p>
+        <h1>智网畅联AI办公室</h1>
+        <p>汇总多个 AI 员工的活跃 session、agent 事件和外发进度消息。</p>
       </div>
       <div class="stats">
         <div class="card">
-          <div class="muted">在线实例</div>
+          <div class="muted">在线AI员工</div>
           <strong id="onlineCount">0</strong>
         </div>
         <div class="card">
-          <div class="muted">总实例</div>
+          <div class="muted">总AI员工</div>
           <strong id="totalCount">0</strong>
         </div>
-        <div class="card">
-          <div class="muted">服务时间</div>
+        <div class="card time-card">
+          <div class="muted">更新时间</div>
           <strong id="serverTime">-</strong>
         </div>
       </div>
@@ -678,20 +815,39 @@ const dashboardHTML = `<!doctype html>
         <div class="scene-stage">
           <div id="threeViewport" class="scene-canvas"></div>
           <div id="threeLabels" class="scene-labels"></div>
+          <div class="scene-actions">
+            <button class="hud-button" type="button" data-scene-fullscreen>全屏显示</button>
+          </div>
           <div class="scene-hud">
-            <div class="hud-card">
-              <h3>3D Overview</h3>
-              <p id="sceneSummary">准备中。切换到 3D 视图后，实例会以角色的形式进入仓库房间，空闲实例会回到休息室。</p>
-              <div class="scene-legend">
-                <span class="legend-item"><span class="legend-swatch" style="background:#0f766e"></span>工作中</span>
-                <span class="legend-item"><span class="legend-swatch" style="background:#b45309"></span>等待/阻塞</span>
-                <span class="legend-item"><span class="legend-swatch" style="background:#475569"></span>空闲</span>
-                <span class="legend-item"><span class="legend-swatch" style="background:#b91c1c"></span>异常/离线</span>
+            <div class="hud-card" data-hud-card data-hud-side="left">
+              <div class="hud-head">
+                <div class="hud-title">
+                  <span class="hud-icon">3D</span>
+                  <h3>3D Overview</h3>
+                </div>
+                <button class="hud-button hud-toggle" type="button" data-hud-toggle data-hud-icon="3D" aria-label="收起 3D Overview">收起</button>
+              </div>
+              <div class="hud-content">
+                <p id="sceneSummary">准备中。切换到 3D 视图后，AI 员工会以角色的形式进入仓库房间，空闲 AI 员工会回到休息室。</p>
+                <div class="scene-legend">
+                  <span class="legend-item"><span class="legend-swatch" style="background:#0f766e"></span>工作中</span>
+                  <span class="legend-item"><span class="legend-swatch" style="background:#b45309"></span>等待/阻塞</span>
+                  <span class="legend-item"><span class="legend-swatch" style="background:#475569"></span>空闲</span>
+                  <span class="legend-item"><span class="legend-swatch" style="background:#b91c1c"></span>异常/离线</span>
+                </div>
               </div>
             </div>
-            <div class="hud-card">
-              <h3>操作说明</h3>
-              <p>拖动旋转镜头，滚轮缩放。房间会按最近活跃仓库聚合，角色头顶的气泡会显示最近进度。</p>
+            <div class="hud-card" data-hud-card data-hud-side="right">
+              <div class="hud-head">
+                <div class="hud-title">
+                  <span class="hud-icon">?</span>
+                  <h3>操作说明</h3>
+                </div>
+                <button class="hud-button hud-toggle" type="button" data-hud-toggle data-hud-icon="?" aria-label="收起 操作说明">收起</button>
+              </div>
+              <div class="hud-content">
+                <p>拖动旋转镜头，滚轮缩放。房间会按最近活跃仓库聚合，角色头顶的气泡会显示最近进度。</p>
+              </div>
             </div>
           </div>
         </div>
@@ -714,8 +870,9 @@ const dashboardHTML = `<!doctype html>
       return new Date(value).toLocaleString();
     }
 
-    function runtimeBox(title, content) {
-      return '<div class="runtime-box"><h3>' + esc(title) + '</h3><pre>' + esc(content || "-") + '</pre></div>';
+    function runtimeBox(title, content, className) {
+      const cls = className ? "runtime-box " + className : "runtime-box";
+      return '<div class="' + esc(cls) + '"><h3>' + esc(title) + '</h3><pre>' + esc(content || "-") + '</pre></div>';
     }
 
     function dialogId(instance, group) {
@@ -749,10 +906,8 @@ const dashboardHTML = `<!doctype html>
         .slice(-4)
         .map((item) => "[" + item.type + "] " + (item.tool_name ? item.tool_name + " · " : "") + (item.content || "-"))
         .join("\n\n");
-      const outbound = (runtime.recent_outbound || [])
-        .slice(-4)
-        .map((item) => "[" + item.kind + "] " + (item.content || "-"))
-        .join("\n\n");
+      const lastOutbound = (runtime.recent_outbound || []).slice(-1)[0];
+      const outbound = lastOutbound ? "[" + lastOutbound.kind + "] " + (lastOutbound.content || "-") : "-";
 
       return ''
         + '<article class="group">'
@@ -775,7 +930,7 @@ const dashboardHTML = `<!doctype html>
         +     '<div class="muted">运行状态: ' + esc(runtime.status || "idle") + ' · 更新时间: ' + esc(fmtTime(runtime.updated_at)) + '</div>'
         +     '<div class="runtime-grid">'
         +       runtimeBox("最近用户输入", runtime.last_user_message)
-        +       runtimeBox("最近助手输出", runtime.last_assistant_message)
+        +       runtimeBox("最近助手输出", runtime.last_assistant_message, "scrollable")
         +       runtimeBox("最近 agent 事件", events)
         +       runtimeBox("最近外发消息", outbound)
         +     '</div>'
@@ -809,11 +964,11 @@ const dashboardHTML = `<!doctype html>
         +         '<span class="pill">' + esc(instance.project) + '</span>'
         +         '<span class="pill">' + esc(instance.agent) + '</span>'
         +       '</div>'
-        +       '<div class="muted">instance_id: ' + esc(instance.instance_id) + ' · host: ' + esc(instance.hostname) + ' · pid: ' + esc(instance.pid) + '</div>'
+        +       '<div class="muted">AI员工ID: ' + esc(instance.instance_id) + ' · host: ' + esc(instance.hostname) + ' · pid: ' + esc(instance.pid) + '</div>'
         +     '</div>'
         +     '<div class="muted">last seen: ' + esc(fmtTime(instance.last_seen_at)) + '</div>'
         +   '</div>'
-        +   '<div class="group-list">' + (groups || '<div class="empty">这个实例还没有上报任何 session。</div>') + '</div>'
+        +   '<div class="group-list">' + (groups || '<div class="empty">这个 AI 员工还没有上报任何 session。</div>') + '</div>'
         + '</section>';
     }
 
@@ -839,7 +994,7 @@ const dashboardHTML = `<!doctype html>
 
       const root = document.getElementById("instances");
       if (!instances.length) {
-        root.innerHTML = '<div class="empty">等待实例上报到这个看板。</div>';
+        root.innerHTML = '<div class="empty">等待 AI 员工上报到这个看板。</div>';
         return;
       }
       root.innerHTML = instances.map(renderInstance).join("");
@@ -859,8 +1014,56 @@ const dashboardHTML = `<!doctype html>
 
     tick();
 
+    function toggleHudCard(button) {
+      const card = button.closest("[data-hud-card]");
+      if (!card) return;
+      const minimized = card.classList.toggle("minimized");
+      const icon = button.getAttribute("data-hud-icon") || "i";
+      button.textContent = minimized ? icon : "收起";
+      button.setAttribute("aria-label", minimized ? "展开面板" : "收起面板");
+    }
+
+    async function toggleSceneFullscreen(button) {
+      const stage = document.querySelector(".scene-stage");
+      if (!stage) return;
+      if (document.fullscreenElement === stage) {
+        await document.exitFullscreen();
+        return;
+      }
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+      if (stage.requestFullscreen) {
+        await stage.requestFullscreen();
+      }
+    }
+
+    function syncFullscreenButton() {
+      const button = document.querySelector("[data-scene-fullscreen]");
+      const stage = document.querySelector(".scene-stage");
+      if (!button || !stage) return;
+      button.textContent = document.fullscreenElement === stage ? "退出全屏" : "全屏显示";
+      window.dispatchEvent(new Event("resize"));
+    }
+
     document.addEventListener("click", (event) => {
-      const openID = event.target.closest("[data-dialog-open]")?.getAttribute("data-dialog-open");
+      if (!event.target || !event.target.closest) return;
+      const target = event.target.closest("button, [data-dialog-open], [data-dialog-close]");
+      if (!target) return;
+
+      const hudToggle = target.closest("[data-hud-toggle]");
+      if (hudToggle) {
+        toggleHudCard(hudToggle);
+        return;
+      }
+
+      const fullscreenButton = target.closest("[data-scene-fullscreen]");
+      if (fullscreenButton) {
+        toggleSceneFullscreen(fullscreenButton).catch((err) => console.error(err));
+        return;
+      }
+
+      const openID = target.closest("[data-dialog-open]")?.getAttribute("data-dialog-open");
       if (openID) {
         const dialog = document.getElementById(openID);
         if (dialog) {
@@ -870,7 +1073,7 @@ const dashboardHTML = `<!doctype html>
         return;
       }
 
-      const closeID = event.target.closest("[data-dialog-close]")?.getAttribute("data-dialog-close");
+      const closeID = target.closest("[data-dialog-close]")?.getAttribute("data-dialog-close");
       if (closeID) {
         const dialog = document.getElementById(closeID);
         if (dialog) {
@@ -887,6 +1090,8 @@ const dashboardHTML = `<!doctype html>
         state.openDialogId = null;
       }
     }, true);
+
+    document.addEventListener("fullscreenchange", syncFullscreenButton);
   </script>
   <script type="module">
     import * as THREE from "three";
@@ -966,7 +1171,7 @@ const dashboardHTML = `<!doctype html>
       const recentOutbound = ((runtime || {}).recent_outbound || []).slice(-1)[0];
       const parts = [];
       if (status === "idle") return "休息中";
-      if (status === "offline") return "实例离线";
+      if (status === "offline") return "AI员工离线";
       if (status === "error") parts.push("异常处理中");
       if (status === "blocked") parts.push("等待权限");
       if (recentEvent && recentEvent.content) parts.push(recentEvent.content);
@@ -1749,7 +1954,7 @@ const dashboardHTML = `<!doctype html>
       const idle = world.workers.filter((worker) => worker.status === "idle").length;
       const offline = world.workers.filter((worker) => worker.status === "offline").length;
       const repos = world.repos.filter((repo) => repo !== "其他仓库").slice(0, ROOM_LIMIT).join("、") || "暂无活跃仓库";
-      app.summary.textContent = "当前共有 " + total + " 个实例，其中 " + working + " 个在工作，" + blocked + " 个在等待，" + idle + " 个在休息，" + offline + " 个离线。房间按最近仓库聚合：" + repos + "。";
+      app.summary.textContent = "当前共有 " + total + " 位 AI 员工，其中 " + working + " 位在工作，" + blocked + " 位在等待，" + idle + " 位在休息，" + offline + " 位离线。房间按最近仓库聚合：" + repos + "。";
     }
 
     function applyWorldData(payload) {

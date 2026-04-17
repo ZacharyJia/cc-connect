@@ -196,7 +196,7 @@ func (r *Reporter) ObserveTurnFinished(sessionKey, status, assistantText string)
 
 	buf := r.ensureBufferLocked(sessionKey)
 	if trimmed := strings.TrimSpace(assistantText); trimmed != "" {
-		buf.LastAssistantMessage = truncatePreview(trimmed)
+		buf.LastAssistantMessage = trimmed
 	}
 	if status != "" {
 		buf.Status = status

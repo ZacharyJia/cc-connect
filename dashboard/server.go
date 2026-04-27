@@ -404,27 +404,40 @@ const dashboardHTML = `<!doctype html>
     }
 
     .message-feed {
-      display: grid;
+      min-height: 220px;
+      max-height: min(56vh, 520px);
+      overflow-y: auto;
+      padding: 12px;
+      border: 1px solid rgba(24,32,39,0.08);
+      border-radius: 16px;
+      background: rgba(238, 243, 239, 0.72);
+      display: flex;
+      flex-direction: column;
       gap: 10px;
+      scroll-behavior: smooth;
     }
 
     .message {
       border: 1px solid rgba(24,32,39,0.08);
       border-radius: 14px;
       padding: 12px 14px;
-      background: rgba(255,255,255,0.62);
+      background: rgba(255,255,255,0.92);
       display: grid;
       gap: 8px;
+      width: min(86%, 760px);
+      box-shadow: 0 8px 24px rgba(21, 32, 43, 0.06);
     }
 
     .message.running {
+      align-self: flex-start;
       border-color: rgba(15,118,110,0.24);
-      background: rgba(15,118,110,0.08);
+      background: #e7f6f3;
     }
 
     .message.final {
+      align-self: flex-end;
       border-color: rgba(24,32,39,0.08);
-      background: rgba(255,255,255,0.78);
+      background: #ffffff;
     }
 
     .message-head {
@@ -442,6 +455,12 @@ const dashboardHTML = `<!doctype html>
       word-break: break-word;
       font: inherit;
       line-height: 1.52;
+    }
+
+    .message-empty {
+      margin: auto;
+      color: var(--muted);
+      text-align: center;
     }
 
     .group-actions {
@@ -897,7 +916,7 @@ const dashboardHTML = `<!doctype html>
     </section>
   </div>
   <script>
-    const state = { timer: null, openDialogId: null };
+    const state = { timer: null, openDialogId: null, feedScroll: new Map() };
 
     function esc(value) {
       return String(value ?? "")
@@ -942,7 +961,7 @@ const dashboardHTML = `<!doctype html>
       } else if (runtime.last_assistant_message) {
         messages.push(messageCard("final", runtime.last_assistant_message, runtime.updated_at));
       }
-      return messages.length ? messages.join("") : '<div class="empty">暂无运行消息或最终结果。</div>';
+      return messages.length ? messages.join("") : '<div class="message-empty">暂无运行消息或最终结果。</div>';
     }
 
     function sessionURL(instance, group, session) {
@@ -953,6 +972,10 @@ const dashboardHTML = `<!doctype html>
         session_id: session.id,
       });
       return base + "/?" + params.toString();
+    }
+
+    function feedID(instance, group) {
+      return String(instance.instance_id || "") + "::" + String(group.session_key || "");
     }
 
     function dialogId(instance, group) {
@@ -970,6 +993,7 @@ const dashboardHTML = `<!doctype html>
       const currentBusy = current && current.busy ? "处理中" : "空闲";
       const currentCls = current && (current.active || current.id === group.active_session_id) ? "current-session active" : "current-session";
       const detailURL = sessionURL(instance, group, current);
+      const msgFeedID = feedID(instance, group);
 
       return ''
         + '<article class="group">'
@@ -988,9 +1012,33 @@ const dashboardHTML = `<!doctype html>
               ? '<div class="group-actions"><a class="ghost-button" href="' + esc(detailURL) + '" target="_blank" rel="noreferrer">打开完整会话</a></div>'
               : '<div class="muted">未上报 Web UI 地址，无法生成完整会话链接。</div>')
         +   '<div class="runtime">'
-        +     '<div class="message-feed">' + renderMessageFeed(runtime) + '</div>'
+        +     '<div class="message-feed" data-feed-id="' + esc(msgFeedID) + '">' + renderMessageFeed(runtime) + '</div>'
         +   '</div>'
         + '</article>';
+    }
+
+    function captureFeedScroll() {
+      for (const feed of document.querySelectorAll("[data-feed-id]")) {
+        const id = feed.getAttribute("data-feed-id");
+        if (!id) continue;
+        const distanceFromBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
+        state.feedScroll.set(id, {
+          top: feed.scrollTop,
+          atBottom: distanceFromBottom < 24
+        });
+      }
+    }
+
+    function restoreFeedScroll() {
+      for (const feed of document.querySelectorAll("[data-feed-id]")) {
+        const id = feed.getAttribute("data-feed-id");
+        const saved = id ? state.feedScroll.get(id) : null;
+        if (!saved || saved.atBottom) {
+          feed.scrollTop = feed.scrollHeight;
+        } else {
+          feed.scrollTop = Math.min(saved.top, Math.max(0, feed.scrollHeight - feed.clientHeight));
+        }
+      }
     }
 
     function renderInstance(instance) {
@@ -1040,7 +1088,9 @@ const dashboardHTML = `<!doctype html>
         root.innerHTML = '<div class="empty">等待 AI 员工上报到这个看板。</div>';
         return;
       }
+      captureFeedScroll();
       root.innerHTML = instances.map(renderInstance).join("");
+      restoreFeedScroll();
       restoreDialog();
     }
 

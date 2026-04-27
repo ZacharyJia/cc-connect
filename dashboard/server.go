@@ -414,7 +414,7 @@ const dashboardHTML = `<!doctype html>
       display: flex;
       flex-direction: column;
       gap: 10px;
-      scroll-behavior: smooth;
+      overflow-anchor: none;
     }
 
     .message {
@@ -802,7 +802,7 @@ const dashboardHTML = `<!doctype html>
     }
 
     .worker-bubble {
-      max-width: 240px;
+      max-width: 180px;
       padding: 10px 12px;
       border-radius: 16px;
       background: rgba(255,255,255,0.92);
@@ -811,6 +811,8 @@ const dashboardHTML = `<!doctype html>
       line-height: 1.45;
       font-size: 12px;
       text-align: left;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     .worker-tag {
@@ -916,7 +918,7 @@ const dashboardHTML = `<!doctype html>
     </section>
   </div>
   <script>
-    const state = { timer: null, openDialogId: null, feedScroll: new Map() };
+    const state = { timer: null, openDialogId: null, feedScroll: new Map(), instancesHTML: "" };
 
     function esc(value) {
       return String(value ?? "")
@@ -1057,7 +1059,7 @@ const dashboardHTML = `<!doctype html>
         +       '</div>'
         +       '<div class="muted">AI员工ID: ' + esc(instance.instance_id) + ' · host: ' + esc(instance.hostname) + ' · IP: ' + esc(instance.web_host || "-") + ' · port: ' + esc(instance.web_port || "-") + '</div>'
         +     '</div>'
-        +     '<div class="muted">last seen: ' + esc(fmtTime(instance.last_seen_at)) + '</div>'
+        +     '<div class="muted">started: ' + esc(fmtTime(instance.started_at)) + '</div>'
         +   '</div>'
         +   '<div class="group-list">' + (groups || '<div class="empty">这个 AI 员工还没有上报任何 session。</div>') + '</div>'
         + '</section>';
@@ -1085,12 +1087,20 @@ const dashboardHTML = `<!doctype html>
 
       const root = document.getElementById("instances");
       if (!instances.length) {
-        root.innerHTML = '<div class="empty">等待 AI 员工上报到这个看板。</div>';
+        const emptyHTML = '<div class="empty">等待 AI 员工上报到这个看板。</div>';
+        if (state.instancesHTML !== emptyHTML) {
+          state.instancesHTML = emptyHTML;
+          root.innerHTML = emptyHTML;
+        }
         return;
       }
-      captureFeedScroll();
-      root.innerHTML = instances.map(renderInstance).join("");
-      restoreFeedScroll();
+      const nextHTML = instances.map(renderInstance).join("");
+      if (state.instancesHTML !== nextHTML) {
+        captureFeedScroll();
+        root.innerHTML = nextHTML;
+        state.instancesHTML = nextHTML;
+        restoreFeedScroll();
+      }
       restoreDialog();
     }
 
@@ -1634,11 +1644,30 @@ const dashboardHTML = `<!doctype html>
       const words = String(text || "").split(/\s+/).filter(Boolean);
       if (!words.length) return [""];
       const lines = [];
-      let line = words[0];
+      let line = "";
+      const pushToken = (token) => {
+        for (const ch of Array.from(token)) {
+          const next = line ? line + ch : ch;
+          if (ctx.measureText(next).width <= maxWidth) {
+            line = next;
+          } else {
+            if (line) lines.push(line);
+            line = ch;
+          }
+        }
+      };
+
+      pushToken(words[0]);
       for (let i = 1; i < words.length; i++) {
         const next = line + " " + words[i];
         if (ctx.measureText(next).width <= maxWidth) {
           line = next;
+        } else if (ctx.measureText(words[i]).width > maxWidth) {
+          if (line) {
+            lines.push(line);
+            line = "";
+          }
+          pushToken(words[i]);
         } else {
           lines.push(line);
           line = words[i];
@@ -1678,10 +1707,10 @@ const dashboardHTML = `<!doctype html>
       ctx.fillStyle = "#182027";
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      ctx.font = "600 34px IBM Plex Sans, PingFang SC, Noto Sans SC, sans-serif";
+      ctx.font = "600 30px IBM Plex Sans, PingFang SC, Noto Sans SC, sans-serif";
 
-      const lines = wrapText(ctx, String(text || ""), canvas.width - 72).slice(0, 4);
-      const lineHeight = 44;
+      const lines = wrapText(ctx, String(text || ""), canvas.width - 80).slice(0, 5);
+      const lineHeight = 38;
       const startY = 38;
       lines.forEach((line, index) => {
         ctx.fillText(line, canvas.width / 2, startY + index * lineHeight);
@@ -1930,7 +1959,7 @@ const dashboardHTML = `<!doctype html>
       shadow.position.y = 0.01;
       root.add(shadow);
 
-      const bubble = createTextSprite(640, 320, 3.9, 1.95, (ctx, canvas, texture) => {
+      const bubble = createTextSprite(560, 300, 3.05, 1.64, (ctx, canvas, texture) => {
         drawBubbleTexture(ctx, canvas, texture, worker.bubble || "");
       }, 12);
       bubble.sprite.position.set(0, 4.65, 0);

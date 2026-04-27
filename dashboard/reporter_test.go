@@ -174,3 +174,34 @@ func TestReporterKeepsFullLastAssistantMessage(t *testing.T) {
 
 	t.Fatalf("reporter did not preserve full assistant message")
 }
+
+func TestReporterDoesNotUseToolEventsAsRunningMessage(t *testing.T) {
+	reporter, err := NewReporter(ReporterConfig{
+		Enabled:      true,
+		Endpoint:     "http://127.0.0.1:1",
+		InstanceID:   "worker-a",
+		InstanceName: "worker-a",
+	}, "default", "codex", "dev")
+	if err != nil {
+		t.Fatalf("new reporter: %v", err)
+	}
+
+	reporter.SetSnapshotBuilder(func() []SessionGroupReport {
+		return []SessionGroupReport{{SessionKey: "telegram:u1"}}
+	})
+
+	reporter.ObserveEvent("telegram:u1", "tool_use", `{"cmd":"go test ./..."}`, "shell")
+	reporter.ObserveOutbound("telegram:u1", "draft", "状态: 运行中\n工具调用: 3\n最近工具: shell\n最近思考: 正在整理结果")
+
+	payload := reporter.buildPayload()
+	if len(payload.Groups) != 1 {
+		t.Fatalf("expected one group, got %d", len(payload.Groups))
+	}
+	got := payload.Groups[0].Runtime.RunningMessage
+	if strings.Contains(got, "工具调用") || strings.Contains(got, "最近工具") || strings.Contains(got, "shell") {
+		t.Fatalf("running message contains tool details: %q", got)
+	}
+	if !strings.Contains(got, "最近思考") {
+		t.Fatalf("running message lost readable progress: %q", got)
+	}
+}

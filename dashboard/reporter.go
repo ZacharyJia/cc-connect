@@ -168,12 +168,8 @@ func (r *Reporter) ObserveEvent(sessionKey string, eventType, content, toolName 
 	buf.RecentEvents = appendBounded(buf.RecentEvents, entry, maxRuntimeEvents)
 	buf.LastEventType = entry.Type
 	buf.LastEventText = entry.Content
-	if entry.Content != "" {
-		if entry.ToolName != "" && (eventType == "tool_use" || eventType == "permission_request") {
-			buf.RunningMessage = entry.ToolName + "\n" + entry.Content
-		} else {
-			buf.RunningMessage = entry.Content
-		}
+	if eventUpdatesRunningMessage(eventType) && entry.Content != "" {
+		buf.RunningMessage = entry.Content
 		buf.RunningUpdatedAt = now
 	}
 	buf.UpdatedAt = now
@@ -203,7 +199,7 @@ func (r *Reporter) ObserveOutbound(sessionKey, kind, content string) {
 	content = strings.TrimSpace(content)
 	kind = strings.TrimSpace(kind)
 	if kind == "draft" {
-		buf.RunningMessage = content
+		buf.RunningMessage = cleanDashboardDraft(content)
 		buf.RunningUpdatedAt = now
 	}
 	buf.RecentOutbound = appendBounded(buf.RecentOutbound, OutboundMessage{
@@ -386,6 +382,31 @@ func appendBounded[T any](items []T, item T, limit int) []T {
 		return items
 	}
 	return append([]T(nil), items[len(items)-limit:]...)
+}
+
+func eventUpdatesRunningMessage(eventType string) bool {
+	switch eventType {
+	case "thinking", "text", "error":
+		return true
+	default:
+		return false
+	}
+}
+
+func cleanDashboardDraft(content string) string {
+	lines := strings.Split(strings.TrimSpace(content), "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "工具调用:") ||
+			strings.HasPrefix(trimmed, "最近工具:") ||
+			strings.HasPrefix(trimmed, "Tool calls:") ||
+			strings.HasPrefix(trimmed, "Latest tool:") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.TrimSpace(strings.Join(kept, "\n"))
 }
 
 func normalizeWebEndpoint(raw string) (string, string, string) {

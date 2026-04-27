@@ -147,6 +147,8 @@ language = "en"
 # token = ""                 # optional bearer token shared with cx-board
 # instance_id = "node-a"     # optional stable instance id
 # instance_name = "Shanghai-Worker-A"
+# public_url = "http://worker.example.com:6380" # optional full Web UI URL shown on the dashboard
+# public_host = "worker.example.com"            # optional IP/domain; uses the [web].listen port
 # heartbeat = "5s"
 
 [log]

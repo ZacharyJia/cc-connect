@@ -35,6 +35,8 @@ type DashboardConfig struct {
 	Token        string `toml:"token"`
 	InstanceID   string `toml:"instance_id"`
 	InstanceName string `toml:"instance_name"`
+	PublicURL    string `toml:"public_url"`
+	PublicHost   string `toml:"public_host"`
 	Heartbeat    string `toml:"heartbeat"`
 }
 

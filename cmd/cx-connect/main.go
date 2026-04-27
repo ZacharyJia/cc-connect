@@ -146,7 +146,7 @@ func main() {
 		apiSrv.RegisterEngine("default", engine)
 	}
 
-	reporter, err := createDashboardReporter(cfg, advertisedWebURL(apiSrv))
+	reporter, err := createDashboardReporter(cfg, advertisedWebURL(apiSrv, cfg.Dashboard))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating dashboard reporter: %v\n", err)
 		os.Exit(1)
@@ -225,14 +225,22 @@ func main() {
 	slog.Info("bye")
 }
 
-func advertisedWebURL(apiSrv *core.APIServer) string {
-	if apiSrv == nil {
-		return ""
+func advertisedWebURL(apiSrv *core.APIServer, dashboardCfg config.DashboardConfig) string {
+	if publicURL := normalizePublicURL(dashboardCfg.PublicURL); publicURL != "" {
+		return publicURL
 	}
-	raw := apiSrv.WebURL()
+
+	raw := ""
+	if apiSrv != nil {
+		raw = apiSrv.WebURL()
+	}
 	if raw == "" {
 		return ""
 	}
+	if publicHost := strings.TrimSpace(dashboardCfg.PublicHost); publicHost != "" {
+		return replaceURLHost(raw, publicHost)
+	}
+
 	u, err := url.Parse(raw)
 	if err != nil {
 		return raw
@@ -246,6 +254,48 @@ func advertisedWebURL(apiSrv *core.APIServer) string {
 		return u.String()
 	}
 	return raw
+}
+
+func normalizePublicURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	return strings.TrimRight(raw, "/")
+}
+
+func replaceURLHost(rawURL, publicHost string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	u.Host = joinHostWithFallbackPort(publicHost, u.Port())
+	return u.String()
+}
+
+func joinHostWithFallbackPort(host, fallbackPort string) string {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return ""
+	}
+	if strings.Contains(host, "://") {
+		if u, err := url.Parse(host); err == nil && u.Host != "" {
+			return u.Host
+		}
+	}
+	if h, p, err := net.SplitHostPort(host); err == nil {
+		if p != "" {
+			return net.JoinHostPort(h, p)
+		}
+		host = h
+	}
+	if fallbackPort == "" {
+		return host
+	}
+	return net.JoinHostPort(host, fallbackPort)
 }
 
 func firstOutboundIP() string {

@@ -465,6 +465,10 @@ const adminWebUIHTML = `<!doctype html>
       autoRefreshEnabled: false,
     };
 
+    const initialParams = new URLSearchParams(window.location.search);
+    state.selectedSessionKey = initialParams.get("session_key") || "";
+    state.selectedSessionID = initialParams.get("session_id") || "";
+
     const els = {
       autoRefreshButton: document.getElementById("autoRefreshButton"),
       refreshButton: document.getElementById("refreshButton"),
@@ -590,6 +594,7 @@ const adminWebUIHTML = `<!doctype html>
         button.addEventListener("click", async () => {
           state.selectedSessionKey = button.dataset.sessionKey;
           state.selectedSessionID = button.dataset.sessionId;
+          updateSelectionURL();
           setStatus(els.promptStatus, "");
           renderGroups();
           await loadDetail();
@@ -667,6 +672,14 @@ const adminWebUIHTML = `<!doctype html>
       els.autoRefreshButton.textContent = state.autoRefreshEnabled ? "关闭自动刷新" : "开启自动刷新";
     }
 
+    function updateSelectionURL() {
+      if (!state.selectedSessionKey || !state.selectedSessionID) return;
+      const params = new URLSearchParams(window.location.search);
+      params.set("session_key", state.selectedSessionKey);
+      params.set("session_id", state.selectedSessionID);
+      window.history.replaceState(null, "", window.location.pathname + "?" + params.toString());
+    }
+
     async function createSession() {
       const name = els.createName.value;
       const workDir = els.createWorkDir.value;
@@ -684,6 +697,7 @@ const adminWebUIHTML = `<!doctype html>
         });
         state.selectedSessionKey = data.session_key;
         state.selectedSessionID = data.session.id;
+        updateSelectionURL();
         els.createName.value = "";
         els.createWorkDir.value = "";
         setStatus(els.createStatus, "Web Session 已创建，Session Key: " + data.session_key + "，工作目录: " + (data.display_work_dir || data.session.work_dir || "-"), "ok");

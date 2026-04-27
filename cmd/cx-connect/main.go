@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -128,7 +130,23 @@ func main() {
 
 	// Create engine from config (single agent + platforms)
 	engine := createEngine(cfg)
-	reporter, err := createDashboardReporter(cfg)
+
+	webAddr := ""
+	if cfg.Web.Enabled || strings.TrimSpace(cfg.Web.Listen) != "" {
+		webAddr = strings.TrimSpace(cfg.Web.Listen)
+		if webAddr == "" {
+			webAddr = "127.0.0.1:6380"
+		}
+	}
+
+	apiSrv, err := core.NewAPIServer(cfg.DataDir, webAddr)
+	if err != nil {
+		slog.Warn("api server unavailable", "error", err)
+	} else {
+		apiSrv.RegisterEngine("default", engine)
+	}
+
+	reporter, err := createDashboardReporter(cfg, advertisedWebURL(apiSrv))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating dashboard reporter: %v\n", err)
 		os.Exit(1)
@@ -151,6 +169,9 @@ func main() {
 	}
 
 	if err := engine.Start(); err != nil {
+		if apiSrv != nil {
+			apiSrv.Stop()
+		}
 		slog.Error("failed to start engine", "error", err)
 		os.Exit(1)
 	}
@@ -161,20 +182,8 @@ func main() {
 		}
 	}
 
-	// Start internal API server for CLI send
-	webAddr := ""
-	if cfg.Web.Enabled || strings.TrimSpace(cfg.Web.Listen) != "" {
-		webAddr = strings.TrimSpace(cfg.Web.Listen)
-		if webAddr == "" {
-			webAddr = "127.0.0.1:6380"
-		}
-	}
-
-	apiSrv, err := core.NewAPIServer(cfg.DataDir, webAddr)
-	if err != nil {
-		slog.Warn("api server unavailable", "error", err)
-	} else {
-		apiSrv.RegisterEngine("default", engine)
+	// Start internal API server for CLI send and the optional local Web UI.
+	if apiSrv != nil {
 		if cronSched != nil {
 			apiSrv.SetCronScheduler(cronSched)
 		}
@@ -214,6 +223,42 @@ func main() {
 		slog.Error("shutdown error", "error", err)
 	}
 	slog.Info("bye")
+}
+
+func advertisedWebURL(apiSrv *core.APIServer) string {
+	if apiSrv == nil {
+		return ""
+	}
+	raw := apiSrv.WebURL()
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	host := u.Hostname()
+	if host != "" && host != "0.0.0.0" && host != "::" {
+		return raw
+	}
+	if ip := firstOutboundIP(); ip != "" {
+		u.Host = net.JoinHostPort(ip, u.Port())
+		return u.String()
+	}
+	return raw
+}
+
+func firstOutboundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || addr.IP == nil {
+		return ""
+	}
+	return addr.IP.String()
 }
 
 // sessionStorePath builds a unique filename from project name + work_dir.

@@ -33,6 +33,9 @@ type RuntimeState struct {
 	LastAssistantMessage string            `json:"last_assistant_message,omitempty"`
 	LastEventType        string            `json:"last_event_type,omitempty"`
 	LastEventText        string            `json:"last_event_text,omitempty"`
+	RunningMessage       string            `json:"running_message,omitempty"`
+	RunningUpdatedAt     time.Time         `json:"running_updated_at,omitempty"`
+	FinalMessages        []OutboundMessage `json:"final_messages,omitempty"`
 	UpdatedAt            time.Time         `json:"updated_at"`
 	RecentEvents         []RuntimeEvent    `json:"recent_events,omitempty"`
 	RecentOutbound       []OutboundMessage `json:"recent_outbound,omitempty"`
@@ -54,6 +57,9 @@ type InstanceReport struct {
 	Agent        string               `json:"agent"`
 	Version      string               `json:"version"`
 	Hostname     string               `json:"hostname"`
+	WebURL       string               `json:"web_url,omitempty"`
+	WebHost      string               `json:"web_host,omitempty"`
+	WebPort      string               `json:"web_port,omitempty"`
 	PID          int                  `json:"pid"`
 	StartedAt    time.Time            `json:"started_at"`
 	ReportedAt   time.Time            `json:"reported_at"`

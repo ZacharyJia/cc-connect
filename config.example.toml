@@ -140,6 +140,7 @@ language = "en"
 
 # Report local instance status to a central dashboard service.
 # The dashboard server can be started with the `cx-board` binary.
+# Enable [web] above on each worker if you want dashboard links to open full sessions.
 # [dashboard]
 # enabled = true
 # endpoint = "http://127.0.0.1:7390"

@@ -7,7 +7,7 @@ import (
 	"github.com/ZacharyJia/cx-connect/dashboard"
 )
 
-func createDashboardReporter(cfg *config.Config) (*dashboard.Reporter, error) {
+func createDashboardReporter(cfg *config.Config, webURL string) (*dashboard.Reporter, error) {
 	if !cfg.Dashboard.Enabled {
 		return nil, nil
 	}
@@ -27,6 +27,7 @@ func createDashboardReporter(cfg *config.Config) (*dashboard.Reporter, error) {
 		Token:             cfg.Dashboard.Token,
 		InstanceID:        cfg.Dashboard.InstanceID,
 		InstanceName:      cfg.Dashboard.InstanceName,
+		WebURL:            webURL,
 		HeartbeatInterval: heartbeat,
 	}, "default", cfg.Agent.Type, version)
 }

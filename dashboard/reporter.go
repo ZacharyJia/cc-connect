@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -16,7 +18,7 @@ import (
 const (
 	maxRuntimeEvents   = 20
 	maxOutboundEntries = 20
-	maxPreviewLen      = 600
+	maxFinalMessages   = 100
 )
 
 type ReporterConfig struct {
@@ -25,6 +27,7 @@ type ReporterConfig struct {
 	Token             string
 	InstanceID        string
 	InstanceName      string
+	WebURL            string
 	HeartbeatInterval time.Duration
 }
 
@@ -34,6 +37,9 @@ type runtimeBuffer struct {
 	LastAssistantMessage string
 	LastEventType        string
 	LastEventText        string
+	RunningMessage       string
+	RunningUpdatedAt     time.Time
+	FinalMessages        []OutboundMessage
 	UpdatedAt            time.Time
 	RecentEvents         []RuntimeEvent
 	RecentOutbound       []OutboundMessage
@@ -47,6 +53,9 @@ type Reporter struct {
 	agent     string
 	version   string
 	hostname  string
+	webURL    string
+	webHost   string
+	webPort   string
 	pid       int
 	startedAt time.Time
 
@@ -84,6 +93,7 @@ func NewReporter(cfg ReporterConfig, project, agent, version string) (*Reporter,
 	if instanceName == "" {
 		instanceName = hostname
 	}
+	webURL, webHost, webPort := normalizeWebEndpoint(cfg.WebURL)
 
 	return &Reporter{
 		config: ReporterConfig{
@@ -92,6 +102,7 @@ func NewReporter(cfg ReporterConfig, project, agent, version string) (*Reporter,
 			Token:             strings.TrimSpace(cfg.Token),
 			InstanceID:        instanceID,
 			InstanceName:      instanceName,
+			WebURL:            webURL,
 			HeartbeatInterval: heartbeat,
 		},
 		client:         &http.Client{Timeout: 10 * time.Second},
@@ -99,6 +110,9 @@ func NewReporter(cfg ReporterConfig, project, agent, version string) (*Reporter,
 		agent:          agent,
 		version:        version,
 		hostname:       hostname,
+		webURL:         webURL,
+		webHost:        webHost,
+		webPort:        webPort,
 		pid:            os.Getpid(),
 		startedAt:      time.Now(),
 		runtimeByGroup: make(map[string]*runtimeBuffer),
@@ -131,7 +145,7 @@ func (r *Reporter) ObserveInbound(sessionKey, content string) {
 	defer r.mu.Unlock()
 	buf := r.ensureBufferLocked(sessionKey)
 	buf.Status = "running"
-	buf.LastUserMessage = truncatePreview(content)
+	buf.LastUserMessage = strings.TrimSpace(content)
 	buf.UpdatedAt = time.Now()
 	r.markDirtyLocked()
 }
@@ -147,13 +161,21 @@ func (r *Reporter) ObserveEvent(sessionKey string, eventType, content, toolName 
 	now := time.Now()
 	entry := RuntimeEvent{
 		Type:      eventType,
-		Content:   truncatePreview(content),
-		ToolName:  truncatePreview(toolName),
+		Content:   strings.TrimSpace(content),
+		ToolName:  strings.TrimSpace(toolName),
 		Timestamp: now,
 	}
 	buf.RecentEvents = appendBounded(buf.RecentEvents, entry, maxRuntimeEvents)
 	buf.LastEventType = entry.Type
 	buf.LastEventText = entry.Content
+	if entry.Content != "" {
+		if entry.ToolName != "" && (eventType == "tool_use" || eventType == "permission_request") {
+			buf.RunningMessage = entry.ToolName + "\n" + entry.Content
+		} else {
+			buf.RunningMessage = entry.Content
+		}
+		buf.RunningUpdatedAt = now
+	}
 	buf.UpdatedAt = now
 
 	switch eventType {
@@ -178,9 +200,15 @@ func (r *Reporter) ObserveOutbound(sessionKey, kind, content string) {
 
 	buf := r.ensureBufferLocked(sessionKey)
 	now := time.Now()
+	content = strings.TrimSpace(content)
+	kind = strings.TrimSpace(kind)
+	if kind == "draft" {
+		buf.RunningMessage = content
+		buf.RunningUpdatedAt = now
+	}
 	buf.RecentOutbound = appendBounded(buf.RecentOutbound, OutboundMessage{
 		Kind:      kind,
-		Content:   truncatePreview(content),
+		Content:   content,
 		Timestamp: now,
 	}, maxOutboundEntries)
 	buf.UpdatedAt = now
@@ -197,6 +225,11 @@ func (r *Reporter) ObserveTurnFinished(sessionKey, status, assistantText string)
 	buf := r.ensureBufferLocked(sessionKey)
 	if trimmed := strings.TrimSpace(assistantText); trimmed != "" {
 		buf.LastAssistantMessage = trimmed
+		buf.FinalMessages = appendBounded(buf.FinalMessages, OutboundMessage{
+			Kind:      "final",
+			Content:   trimmed,
+			Timestamp: time.Now(),
+		}, maxFinalMessages)
 	}
 	if status != "" {
 		buf.Status = status
@@ -272,6 +305,9 @@ func (r *Reporter) buildPayload() InstanceReport {
 			LastAssistantMessage: buf.LastAssistantMessage,
 			LastEventType:        buf.LastEventType,
 			LastEventText:        buf.LastEventText,
+			RunningMessage:       buf.RunningMessage,
+			RunningUpdatedAt:     buf.RunningUpdatedAt,
+			FinalMessages:        append([]OutboundMessage(nil), buf.FinalMessages...),
 			UpdatedAt:            buf.UpdatedAt,
 			RecentEvents:         append([]RuntimeEvent(nil), buf.RecentEvents...),
 			RecentOutbound:       append([]OutboundMessage(nil), buf.RecentOutbound...),
@@ -291,6 +327,9 @@ func (r *Reporter) buildPayload() InstanceReport {
 				LastAssistantMessage: buf.LastAssistantMessage,
 				LastEventType:        buf.LastEventType,
 				LastEventText:        buf.LastEventText,
+				RunningMessage:       buf.RunningMessage,
+				RunningUpdatedAt:     buf.RunningUpdatedAt,
+				FinalMessages:        buf.FinalMessages,
 				UpdatedAt:            buf.UpdatedAt,
 				RecentEvents:         buf.RecentEvents,
 				RecentOutbound:       buf.RecentOutbound,
@@ -305,6 +344,9 @@ func (r *Reporter) buildPayload() InstanceReport {
 		Agent:        r.agent,
 		Version:      r.version,
 		Hostname:     r.hostname,
+		WebURL:       r.webURL,
+		WebHost:      r.webHost,
+		WebPort:      r.webPort,
 		PID:          r.pid,
 		StartedAt:    r.startedAt,
 		ReportedAt:   time.Now(),
@@ -338,18 +380,27 @@ func (r *Reporter) markDirtyLocked() {
 	}
 }
 
-func truncatePreview(s string) string {
-	s = strings.TrimSpace(s)
-	if len(s) <= maxPreviewLen {
-		return s
-	}
-	return s[:maxPreviewLen] + "..."
-}
-
 func appendBounded[T any](items []T, item T, limit int) []T {
 	items = append(items, item)
 	if len(items) <= limit {
 		return items
 	}
 	return append([]T(nil), items[len(items)-limit:]...)
+}
+
+func normalizeWebEndpoint(raw string) (string, string, string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw, "", ""
+	}
+	host := u.Hostname()
+	port := u.Port()
+	if host == "" {
+		host, port, _ = net.SplitHostPort(u.Host)
+	}
+	return raw, host, port
 }

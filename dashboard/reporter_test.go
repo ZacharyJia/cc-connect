@@ -41,6 +41,7 @@ func TestReporterFlushesRuntimeState(t *testing.T) {
 		Endpoint:          srv.URL,
 		InstanceID:        "worker-a",
 		InstanceName:      "worker-a",
+		WebURL:            "http://10.0.0.7:6380",
 		HeartbeatInterval: 20 * time.Millisecond,
 	}, "default", "codex", "dev")
 	if err != nil {
@@ -65,8 +66,9 @@ func TestReporterFlushesRuntimeState(t *testing.T) {
 	defer cancel()
 	reporter.Start(ctx)
 	reporter.ObserveInbound("feishu:u1", "build dashboard")
+	progressMessage := strings.Repeat("progress-message-", 80)
 	reporter.ObserveEvent("feishu:u1", "thinking", "planning", "")
-	reporter.ObserveOutbound("feishu:u1", "send", "progress message")
+	reporter.ObserveOutbound("feishu:u1", "draft", progressMessage)
 	reporter.ObserveTurnFinished("feishu:u1", "idle", "done")
 
 	deadline := time.Now().Add(500 * time.Millisecond)
@@ -80,6 +82,9 @@ func TestReporterFlushesRuntimeState(t *testing.T) {
 		mu.Unlock()
 
 		if count > 0 && len(latest.Groups) == 1 && latest.Groups[0].Runtime.LastAssistantMessage == "done" {
+			if latest.WebURL != "http://10.0.0.7:6380" || latest.WebHost != "10.0.0.7" || latest.WebPort != "6380" {
+				t.Fatalf("unexpected web endpoint: url=%q host=%q port=%q", latest.WebURL, latest.WebHost, latest.WebPort)
+			}
 			group := latest.Groups[0]
 			if group.Runtime.Status != "idle" {
 				t.Fatalf("unexpected runtime status: %s", group.Runtime.Status)
@@ -89,6 +94,12 @@ func TestReporterFlushesRuntimeState(t *testing.T) {
 			}
 			if len(group.Runtime.RecentEvents) == 0 {
 				t.Fatalf("expected runtime events to be reported")
+			}
+			if group.Runtime.RunningMessage != progressMessage {
+				t.Fatalf("unexpected running message: %q", group.Runtime.RunningMessage)
+			}
+			if len(group.Runtime.FinalMessages) != 1 || group.Runtime.FinalMessages[0].Content != "done" {
+				t.Fatalf("expected final message to be reported, got %#v", group.Runtime.FinalMessages)
 			}
 			if len(group.Runtime.RecentOutbound) == 0 {
 				t.Fatalf("expected outbound messages to be reported")

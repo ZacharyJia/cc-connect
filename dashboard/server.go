@@ -403,6 +403,47 @@ const dashboardHTML = `<!doctype html>
       gap: 10px;
     }
 
+    .message-feed {
+      display: grid;
+      gap: 10px;
+    }
+
+    .message {
+      border: 1px solid rgba(24,32,39,0.08);
+      border-radius: 14px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.62);
+      display: grid;
+      gap: 8px;
+    }
+
+    .message.running {
+      border-color: rgba(15,118,110,0.24);
+      background: rgba(15,118,110,0.08);
+    }
+
+    .message.final {
+      border-color: rgba(24,32,39,0.08);
+      background: rgba(255,255,255,0.78);
+    }
+
+    .message-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .message pre {
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      font: inherit;
+      line-height: 1.52;
+    }
+
     .group-actions {
       display: flex;
       justify-content: flex-end;
@@ -416,6 +457,7 @@ const dashboardHTML = `<!doctype html>
       color: var(--ink);
       font: inherit;
       cursor: pointer;
+      text-decoration: none;
     }
 
     .ghost-button:hover {
@@ -875,6 +917,44 @@ const dashboardHTML = `<!doctype html>
       return '<div class="' + esc(cls) + '"><h3>' + esc(title) + '</h3><pre>' + esc(content || "-") + '</pre></div>';
     }
 
+    function messageCard(kind, content, timestamp) {
+      const label = kind === "running" ? "运行消息" : "最终结果";
+      return ''
+        + '<article class="message ' + esc(kind) + '">'
+        +   '<div class="message-head"><span>' + esc(label) + '</span><span>' + esc(fmtTime(timestamp)) + '</span></div>'
+        +   '<pre>' + esc(content || "-") + '</pre>'
+        + '</article>';
+    }
+
+    function renderMessageFeed(runtime) {
+      const messages = [];
+      if (runtime.running_message) {
+        messages.push(messageCard("running", runtime.running_message, runtime.running_updated_at || runtime.updated_at));
+      } else if (runtime.last_event_text) {
+        messages.push(messageCard("running", runtime.last_event_text, runtime.updated_at));
+      }
+
+      const finals = runtime.final_messages || [];
+      if (finals.length) {
+        for (const item of finals) {
+          messages.push(messageCard("final", item.content, item.timestamp));
+        }
+      } else if (runtime.last_assistant_message) {
+        messages.push(messageCard("final", runtime.last_assistant_message, runtime.updated_at));
+      }
+      return messages.length ? messages.join("") : '<div class="empty">暂无运行消息或最终结果。</div>';
+    }
+
+    function sessionURL(instance, group, session) {
+      if (!instance.web_url || !session || !session.id || !group.session_key) return "";
+      const base = String(instance.web_url).replace(/\/+$/, "");
+      const params = new URLSearchParams({
+        session_key: group.session_key,
+        session_id: session.id,
+      });
+      return base + "/?" + params.toString();
+    }
+
     function dialogId(instance, group) {
       return "dlg_" + String(instance.instance_id || "") + "__" + String(group.session_key || "").replace(/[^a-zA-Z0-9_-]/g, "_");
     }
@@ -887,66 +967,29 @@ const dashboardHTML = `<!doctype html>
     function renderGroup(instance, group) {
       const runtime = group.runtime || {};
       const current = findCurrentSession(group);
-      const sessions = (group.sessions || []).map((session) => {
-        const cls = session.active ? "session-line active" : "session-line";
-        const busy = session.busy ? "处理中" : "空闲";
-        return ''
-          + '<div class="' + cls + '">'
-          +   '<strong>' + esc(session.name) + ' <span class="pill">' + esc(session.id) + '</span></strong>'
-          +   '<div class="muted">workdir: ' + esc(session.work_dir || "-") + '</div>'
-          +   '<div class="muted">agent_session: ' + esc(session.agent_session_id || "-") + '</div>'
-          +   '<div class="muted">history: ' + esc(session.history_count) + ' · ' + esc(busy) + '</div>'
-          + '</div>';
-      }).join("");
       const currentBusy = current && current.busy ? "处理中" : "空闲";
       const currentCls = current && (current.active || current.id === group.active_session_id) ? "current-session active" : "current-session";
-      const dlgID = dialogId(instance, group);
-
-      const events = (runtime.recent_events || [])
-        .slice(-4)
-        .map((item) => "[" + item.type + "] " + (item.tool_name ? item.tool_name + " · " : "") + (item.content || "-"))
-        .join("\n\n");
-      const lastOutbound = (runtime.recent_outbound || []).slice(-1)[0];
-      const outbound = lastOutbound ? "[" + lastOutbound.kind + "] " + (lastOutbound.content || "-") : "-";
+      const detailURL = sessionURL(instance, group, current);
 
       return ''
         + '<article class="group">'
         +   '<div>'
         +     '<strong>' + esc(group.session_key) + '</strong>'
-        +     '<div class="muted">platform: ' + esc(group.platform) + ' · active: ' + esc(group.active_session_id || "-") + ' · interactive: ' + (group.interactive ? "yes" : "no") + '</div>'
+        +     '<div class="muted">platform: ' + esc(group.platform) + ' · status: ' + esc(runtime.status || "idle") + ' · updated: ' + esc(fmtTime(runtime.updated_at)) + '</div>'
         +   '</div>'
         +   (current
               ? '<div class="' + currentCls + '">'
                 + '<strong>当前 Session: ' + esc(current.name) + ' <span class="pill">' + esc(current.id) + '</span></strong>'
                 + '<div class="muted">workdir: ' + esc(current.work_dir || "-") + '</div>'
-                + '<div class="muted">agent_session: ' + esc(current.agent_session_id || "-") + '</div>'
                 + '<div class="muted">history: ' + esc(current.history_count) + ' · ' + esc(currentBusy) + '</div>'
                 + '</div>'
               : '<div class="muted">暂无 session</div>')
-        +   ((group.sessions || []).length
-              ? '<div class="group-actions"><button class="ghost-button" type="button" data-dialog-open="' + esc(dlgID) + '">查看全部 Sessions（' + esc((group.sessions || []).length) + '）</button></div>'
-              : '')
+        +   (detailURL
+              ? '<div class="group-actions"><a class="ghost-button" href="' + esc(detailURL) + '" target="_blank" rel="noreferrer">打开完整会话</a></div>'
+              : '<div class="muted">未上报 Web UI 地址，无法生成完整会话链接。</div>')
         +   '<div class="runtime">'
-        +     '<div class="muted">运行状态: ' + esc(runtime.status || "idle") + ' · 更新时间: ' + esc(fmtTime(runtime.updated_at)) + '</div>'
-        +     '<div class="runtime-grid">'
-        +       runtimeBox("最近用户输入", runtime.last_user_message)
-        +       runtimeBox("最近助手输出", runtime.last_assistant_message, "scrollable")
-        +       runtimeBox("最近 agent 事件", events)
-        +       runtimeBox("最近外发消息", outbound)
-        +     '</div>'
+        +     '<div class="message-feed">' + renderMessageFeed(runtime) + '</div>'
         +   '</div>'
-        +   '<dialog class="session-dialog" id="' + esc(dlgID) + '">'
-        +     '<div class="dialog-shell">'
-        +       '<div class="dialog-head">'
-        +         '<div>'
-        +           '<h3 class="dialog-title">Sessions</h3>'
-        +           '<div class="muted">' + esc(group.session_key) + ' · ' + esc(group.platform) + '</div>'
-        +         '</div>'
-        +         '<button class="dialog-close" type="button" data-dialog-close="' + esc(dlgID) + '">关闭</button>'
-        +       '</div>'
-        +       '<div class="dialog-sessions">' + (sessions || '<div class="muted">暂无 session</div>') + '</div>'
-        +     '</div>'
-        +   '</dialog>'
         + '</article>';
     }
 
@@ -964,7 +1007,7 @@ const dashboardHTML = `<!doctype html>
         +         '<span class="pill">' + esc(instance.project) + '</span>'
         +         '<span class="pill">' + esc(instance.agent) + '</span>'
         +       '</div>'
-        +       '<div class="muted">AI员工ID: ' + esc(instance.instance_id) + ' · host: ' + esc(instance.hostname) + ' · pid: ' + esc(instance.pid) + '</div>'
+        +       '<div class="muted">AI员工ID: ' + esc(instance.instance_id) + ' · host: ' + esc(instance.hostname) + ' · IP: ' + esc(instance.web_host || "-") + ' · port: ' + esc(instance.web_port || "-") + '</div>'
         +     '</div>'
         +     '<div class="muted">last seen: ' + esc(fmtTime(instance.last_seen_at)) + '</div>'
         +   '</div>'
